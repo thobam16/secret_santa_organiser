@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Secret Santa Organiser</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 1.5rem;
+      background: #f7f7fb;
+    }
+    h1, h2, h3 {
+      text-align: center;
+    }
+    .card {
+      background: #fff;
+      border-radius: 8px;
+      padding: 1rem 1.5rem;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+    }
+    label {
+      display: block;
+      margin-top: 0.75rem;
+      font-weight: 600;
+    }
+    input, textarea, button {
+      font: inherit;
+    }
+    input, textarea {
+      width: 100%;
+      padding: 0.5rem;
+      margin-top: 0.25rem;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+      box-sizing: border-box;
+    }
+    textarea {
+      min-height: 120px;
+      resize: vertical;
+    }
+    button {
+      margin-top: 1rem;
+      padding: 0.6rem 1.2rem;
+      border-radius: 999px;
+      border: none;
+      cursor: pointer;
+      font-weight: 600;
+      background: #0069d9;
+      color: white;
+    }
+    button.secondary {
+      background: #6c757d;
+    }
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    .hidden {
+      display: none;
+    }
+    .small {
+      font-size: 0.9rem;
+      color: #555;
+    }
+    .error {
+      color: #b00020;
+      margin-top: 0.5rem;
+    }
+    .success {
+      color: #0b8c3f;
+      margin-top: 0.5rem;
+    }
+    .row {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    .row > div {
+      flex: 1 1 250px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 0.5rem;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 0.4rem 0.5rem;
+      text-align: left;
+      font-size: 0.9rem;
+    }
+    th {
+      background: #f1f1f7;
+    }
+    code {
+      background: #eee;
+      padding: 0.1rem 0.3rem;
+      border-radius: 4px;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <h1>Secret Santa Organiser</h1>
+
+  <!-- Setup Panel (organiser) -->
+  <div id="setup-card" class="card">
+    <h2>1. Create a new Secret Santa event</h2>
+    <p class="small">
+      Fill this in once as the organiser. You can participate as well.
+    </p>
+    <label for="organiserName">Organiser name</label>
+    <input id="organiserName" type="text" placeholder="e.g. Alice" />
+
+    <label for="organiserEmail">Organiser email (for admin access)</label>
+    <input id="organiserEmail" type="email" placeholder="e.g. alice@example.com" />
+
+    <label for="participants">
+      Participants (one per line, use a simple format like <code>Name &lt;email&gt;</code> or just a unique name)
+    </label>
+    <textarea id="participants" placeholder="Alice &lt;alice@example.com&gt;
+Bob &lt;bob@example.com&gt;
+Charlie &lt;charlie@example.com&gt;"></textarea>
+
+    <div class="row">
+      <div>
+        <label>
+          <input type="checkbox" id="includeOrganiser" />
+          Include organiser as a participant
+        </label>
+      </div>
+    </div>
+
+    <button id="createEventBtn">Create Secret Santa</button>
+    <div id="setupMessage" class="small"></div>
+  </div>
+
+  <!-- Share Details -->
+  <div id="share-card" class="card hidden">
+    <h2>2. Share with participants</h2>
+    <p class="small">
+      Send this link to everyone taking part. They will use their name/email to find their recipient.
+    </p>
+    <p>
+      Event link: <code id="eventLink"></code>
+    </p>
+    <p class="small">
+      Admin email: <code id="adminEmailDisplay"></code> (use this below to view stats)
+    </p>
+  </div>
+
+  <!-- Participant View -->
+  <div id="participant-card" class="card">
+    <h2>Participant: see your recipient</h2>
+    <p class="small">
+      If you're a participant, enter your name/email exactly as the organiser used for you.
+    </p>
+
+    <label for="eventIdInput">Event ID</label>
+    <input id="eventIdInput" type="text" placeholder="Event ID from link (auto-filled if you used the link)" />
+
+    <label for="participantKeyInput">Your name/email</label>
+    <input id="participantKeyInput" type="text" placeholder="e.g. alice@example.com or Alice" />
+
+    <button id="viewRecipientBtn">View my recipient</button>
+
+    <div id="participantResult" class="small"></div>
+  </div>
+
+  <!-- Admin / Organiser Dashboard -->
+  <div id="admin-card" class="card">
+    <h2>Organiser dashboard</h2>
+    <p class="small">
+      See who has already viewed their recipient. Use the same organiser email as in setup.
+    </p>
+
+    <label for="adminEventIdInput">Event ID</label>
+    <input id="adminEventIdInput" type="text" placeholder="Event ID" />
+
+    <label for="adminEmailInput">Organiser email</label>
+    <input id="adminEmailInput" type="email" placeholder="Organiser email" />
+
+    <button id="loadAdminBtn">Load event stats</button>
+    <div id="adminMessage" class="small"></div>
+    <div id="adminTableWrapper" class="hidden">
+      <h3>Participants &amp; views</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Participant</th>
+            <th>Recipient</th>
+            <th>Viewed?</th>
+            <th>First viewed at</th>
+            <th>Times viewed</th>
+          </tr>
+        </thead>
+        <tbody id="adminTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Firebase SDKs -->
+  <!-- Replace with your Firebase SDK script tags from the Firebase console -->
+  <script type="module">
+    // TODO: replace this config with your own Firebase config
+    // You get this from Firebase Console > Project Settings > General > Your Apps
+    const firebaseConfig = {
+      apiKey: "AIzaSyAdevrXnZ-rfHNxXHHh-R9_aDEKzqeU1mQ",
+      authDomain: "secret-santa-organiser.firebaseapp.com",
+      projectId: "secret-santa-organiser",
+      storageBucket: "secret-santa-organiser.firebasestorage.app",
+      messagingSenderId: "851546467900",
+      appId: "1:851546467900:web:e81ee0bc4d6790bffa9d39",
+      measurementId: "G-ZBJW29F5PJ"
+    };
+
+    // Firebase v9+ modular imports
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
+    import {
+      getFirestore,
+      doc,
+      setDoc,
+      getDoc,
+      updateDoc,
+      serverTimestamp
+    } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    // Utility: random shuffle
+    function shuffle(array) {
+      const arr = array.slice();
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
+
+    function generateDerangement(items) {
+      // Simple retry-based derangement:
+      // Keep shuffling until no one is assigned to themselves.
+      // Good enough for small Secret Santas.
+      if (items.length < 2) return null;
+      let shuffled;
+      let attempts = 0;
+      do {
+        shuffled = shuffle(items);
+        attempts++;
+        if (attempts > 1000) return null;
+      } while (items.some((x, i) => x === shuffled[i]));
+      const result = {};
+      items.forEach((giver, i) => {
+        result[giver] = shuffled[i];
+      });
+      return result;
+    }
+
+    function parseParticipants(text, includeOrganiserName) {
+      const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
+      const participants = [];
+      lines.forEach(line => {
+        // If user writes "Name <email>" we'll store just the email as key and the full name
+        const match = line.match(/^(.*)<(.*)>$/);
+        if (match) {
+          const name = match[1].trim();
+          const email = match[2].trim();
+          participants.push({ key: email, label: `${name} <${email}>` });
+        } else {
+          participants.push({ key: line, label: line });
+        }
+      });
+      if (includeOrganiserName) {
+        participants.push({
+          key: includeOrganiserName,
+          label: includeOrganiserName
+        });
+      }
+      return participants;
+    }
+
+    async function createEvent() {
+      const organiserName = document.getElementById("organiserName").value.trim();
+      const organiserEmail = document.getElementById("organiserEmail").value.trim();
+      const participantsText = document.getElementById("participants").value;
+      const includeOrganiser = document.getElementById("includeOrganiser").checked;
+      const msgEl = document.getElementById("setupMessage");
+
+      msgEl.textContent = "";
+      msgEl.className = "small";
+
+      if (!organiserName || !organiserEmail) {
+        msgEl.textContent = "Please provide organiser name and email.";
+        msgEl.classList.add("error");
+        return;
+      }
+      const parsedParticipants = parseParticipants(
+        participantsText,
+        includeOrganiser ? organiserEmail : null
+      );
+      if (parsedParticipants.length < 2) {
+        msgEl.textContent = "You need at least 2 participants.";
+        msgEl.classList.add("error");
+        return;
+      }
+
+      const keys = parsedParticipants.map(p => p.key);
+      const mapping = generateDerangement(keys);
+      if (!mapping) {
+        msgEl.textContent = "Could not generate a valid assignment, try different participants.";
+        msgEl.classList.add("error");
+        return;
+      }
+
+      // Create an event ID (simple random string)
+      const eventId = Math.random().toString(36).slice(2, 10);
+
+      const participantsState = {};
+      parsedParticipants.forEach(p => {
+        participantsState[p.key] = {
+          label: p.label,
+          recipientKey: mapping[p.key],
+          viewed: false,
+          firstViewedAt: null,
+          viewCount: 0
+        };
+      });
+
+      const eventDoc = {
+        organiserName,
+        organiserEmail,
+        createdAt: new Date().toISOString(),
+        participants: participantsState
+      };
+
+      try {
+        const createBtn = document.getElementById("createEventBtn");
+        createBtn.disabled = true;
+        createBtn.textContent = "Creating...";
+        await setDoc(doc(db, "secret_santa_events", eventId), eventDoc);
+        createBtn.disabled = false;
+        createBtn.textContent = "Create Secret Santa";
+
+        msgEl.textContent = `Event created! Event ID: ${eventId}`;
+        msgEl.classList.add("success");
+
+        const url = new URL(window.location.href);
+        url.searchParams.set("event", eventId);
+        const eventLink = url.toString();
+
+        document.getElementById("share-card").classList.remove("hidden");
+        document.getElementById("eventLink").textContent = eventLink;
+        document.getElementById("adminEmailDisplay").textContent = organiserEmail;
+
+        // Pre-fill event id inputs
+        document.getElementById("eventIdInput").value = eventId;
+        document.getElementById("adminEventIdInput").value = eventId;
+      } catch (err) {
+        console.error(err);
+        msgEl.textContent = "Error creating event: " + err.message;
+        msgEl.classList.add("error");
+        document.getElementById("createEventBtn").disabled = false;
+        document.getElementById("createEventBtn").textContent = "Create Secret Santa";
+      }
+    }
+
+    async function viewRecipient() {
+      const eventId = document.getElementById("eventIdInput").value.trim();
+      const participantKey = document.getElementById("participantKeyInput").value.trim();
+      const resEl = document.getElementById("participantResult");
+
+      resEl.textContent = "";
+      resEl.className = "small";
+
+      if (!eventId || !participantKey) {
+        resEl.textContent = "Please provide event ID and your name/email.";
+        resEl.classList.add("error");
+        return;
+      }
+
+      try {
+        const docRef = doc(db, "secret_santa_events", eventId);
+        const snap = await getDoc(docRef);
+        if (!snap.exists()) {
+          resEl.textContent = "No event found with that ID.";
+          resEl.classList.add("error");
+          return;
+        }
+        const data = snap.data();
+        const participants = data.participants || {};
+        const participant = participants[participantKey];
+
+        if (!participant) {
+          resEl.textContent = "No participant found with that name/email. Check with the organiser.";
+          resEl.classList.add("error");
+          return;
+        }
+
+        const recipientKey = participant.recipientKey;
+        const recipient = participants[recipientKey];
+        const recipientLabel = recipient ? recipient.label : recipientKey;
+
+        resEl.innerHTML = `
+          <strong>Your recipient:</strong><br/>
+          ${recipientLabel}
+        `;
+        resEl.classList.add("success");
+
+        // Update viewed state
+        const newViewCount = (participant.viewCount || 0) + 1;
+        const firstViewedAt = participant.firstViewedAt || new Date().toISOString();
+
+        await updateDoc(docRef, {
+          [`participants.${participantKey}.viewed`]: true,
+          [`participants.${participantKey}.viewCount`]: newViewCount,
+          [`participants.${participantKey}.firstViewedAt`]: firstViewedAt
+        });
+      } catch (err) {
+        console.error(err);
+        resEl.textContent = "Error loading recipient: " + err.message;
+        resEl.classList.add("error");
+      }
+    }
+
+    async function loadAdminView() {
+      const eventId = document.getElementById("adminEventIdInput").value.trim();
+      const adminEmail = document.getElementById("adminEmailInput").value.trim();
+      const msgEl = document.getElementById("adminMessage");
+      const tableWrapper = document.getElementById("adminTableWrapper");
+      const tbody = document.getElementById("adminTableBody");
+
+      msgEl.textContent = "";
+      msgEl.className = "small";
+      tableWrapper.classList.add("hidden");
+      tbody.innerHTML = "";
+
+      if (!eventId || !adminEmail) {
+        msgEl.textContent = "Please provide event ID and organiser email.";
+        msgEl.classList.add("error");
+        return;
+      }
+
+      try {
+        const docRef = doc(db, "secret_santa_events", eventId);
+        const snap = await getDoc(docRef);
+        if (!snap.exists()) {
+          msgEl.textContent = "No event found with that ID.";
+          msgEl.classList.add("error");
+          return;
+        }
+        const data = snap.data();
+        if (data.organiserEmail !== adminEmail) {
+          msgEl.textContent = "Organiser email does not match. Access denied.";
+          msgEl.classList.add("error");
+          return;
+        }
+
+        const participants = data.participants || {};
+        const keys = Object.keys(participants).sort();
+
+        keys.forEach(key => {
+          const p = participants[key];
+          const recipient = participants[p.recipientKey];
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${p.label || key}</td>
+            <td>${recipient ? recipient.label : p.recipientKey}</td>
+            <td>${p.viewed ? "✅" : "❌"}</td>
+            <td>${p.firstViewedAt ? new Date(p.firstViewedAt).toLocaleString() : "-"}</td>
+            <td>${p.viewCount || 0}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+
+        tableWrapper.classList.remove("hidden");
+        msgEl.textContent = `Loaded ${keys.length} participants.`;
+        msgEl.classList.add("success");
+      } catch (err) {
+        console.error(err);
+        msgEl.textContent = "Error loading admin view: " + err.message;
+        msgEl.classList.add("error");
+      }
+    }
+
+    // Wire up buttons
+    document.getElementById("createEventBtn").addEventListener("click", createEvent);
+    document.getElementById("viewRecipientBtn").addEventListener("click", viewRecipient);
+    document.getElementById("loadAdminBtn").addEventListener("click", loadAdminView);
+
+    // If URL has ?event=ID, auto-fill fields
+    const params = new URLSearchParams(window.location.search);
+    const eventFromUrl = params.get("event");
+    if (eventFromUrl) {
+      document.getElementById("eventIdInput").value = eventFromUrl;
+      document.getElementById("adminEventIdInput").value = eventFromUrl;
+    }
+  </script>
+</body>
+</html>
