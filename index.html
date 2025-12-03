@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Secret Santa Organiser</title>
+  <title>Secret Santa - Names Only</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -13,9 +13,6 @@
     :root {
       --primary: #d32f2f;       /* Santa Red */
       --secondary: #1b5e20;     /* Pine Green */
-      --accent: #ffb300;        /* Gold */
-      --bg-gradient-start: #0f172a;
-      --bg-gradient-end: #1e293b;
       --card-bg: rgba(255, 255, 255, 0.95);
       --text-main: #2c3e50;
     }
@@ -46,7 +43,7 @@
     /* --- LAYOUT --- */
     .container {
       position: relative;
-      z-index: 1; /* Above snow */
+      z-index: 1;
       max-width: 800px;
       margin: 0 auto;
       padding: 2rem 1rem;
@@ -75,23 +72,16 @@
       margin-bottom: 1rem;
     }
 
-    h3 { margin: 0 0 0.5rem 0; color: var(--primary); }
-
-    /* --- CARDS --- */
     .card {
       background: var(--card-bg);
       border-radius: 16px;
       padding: 2rem;
       margin-bottom: 2rem;
-      box-shadow: 
-        0 20px 25px -5px rgba(0, 0, 0, 0.2), 
-        0 8px 10px -6px rgba(0, 0, 0, 0.2);
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
       border: 1px solid rgba(255,255,255,0.3);
       backdrop-filter: blur(10px);
-      transition: transform 0.2s ease;
     }
 
-    /* --- FORMS & INPUTS --- */
     label {
       display: block;
       margin-top: 1rem;
@@ -102,7 +92,7 @@
     }
 
     input[type="text"],
-    input[type="email"],
+    input[type="password"],
     textarea {
       width: 100%;
       padding: 0.8rem 1rem;
@@ -127,26 +117,30 @@
       line-height: 1.5;
     }
 
-    /* Checkbox Styling */
-    .checkbox-wrapper {
+    /* Password Input Wrapper */
+    .password-wrapper {
+      position: relative;
       display: flex;
       align-items: center;
-      gap: 0.5rem;
-      margin-top: 1rem;
-      cursor: pointer;
     }
-    input[type="checkbox"] {
-      width: 1.2rem;
-      height: 1.2rem;
-      accent-color: var(--secondary);
-      cursor: pointer;
+    .password-wrapper input {
+      padding-right: 40px; /* Make room for the eye */
     }
-    .checkbox-wrapper label {
-      margin: 0; /* Override default label margin */
+    .toggle-password {
+      position: absolute;
+      right: 10px;
+      background: none;
+      border: none;
       cursor: pointer;
+      font-size: 1.2rem;
+      padding: 0;
+      margin: 0;
+      color: #64748b;
+      box-shadow: none !important;
+      transform: none !important;
     }
+    .toggle-password:hover { color: var(--secondary); }
 
-    /* --- BUTTONS --- */
     button {
       background: linear-gradient(135deg, var(--secondary), #2e7d32);
       color: white;
@@ -161,87 +155,48 @@
       align-items: center;
       gap: 0.5rem;
       box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
-      transition: transform 0.1s, box-shadow 0.1s;
+      transition: transform 0.1s;
     }
-
-    button:hover:not(:disabled) {
-      transform: translateY(-2px);
-      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2);
+    button:hover:not(:disabled) { transform: translateY(-2px); }
+    button:disabled { background: #94a3b8; cursor: not-allowed; }
+    
+    button.secondary { background: linear-gradient(135deg, #475569, #334155); }
+    button.copy-btn { 
+        padding: 0.4rem 0.8rem; 
+        font-size: 0.85rem; 
+        margin-top: 0;
+        background: #f1f5f9;
+        color: #334155;
+        border: 1px solid #cbd5e1;
+        box-shadow: none;
     }
+    button.copy-btn:hover { background: #e2e8f0; transform: translateY(-1px); }
 
-    button:active:not(:disabled) {
-      transform: translateY(0);
-    }
-
-    button:disabled {
-      background: #94a3b8;
-      cursor: not-allowed;
-      transform: none;
-    }
-
-    /* --- UTILS --- */
     .hidden { display: none; }
-    
-    .small {
-      font-size: 0.9rem;
-      color: #64748b;
-      margin-top: 0.5rem;
-      line-height: 1.4;
-    }
-    
+    .small { font-size: 0.9rem; color: #64748b; margin-top: 0.5rem; line-height: 1.4; }
     .error { color: #d32f2f; font-weight: bold; }
     .success { color: #2e7d32; font-weight: bold; }
 
-    code {
-      background: #e2e8f0;
-      padding: 0.2rem 0.4rem;
-      border-radius: 4px;
-      font-family: monospace;
-      color: #c02525;
-      font-weight: bold;
-    }
-
-    /* --- TABLES --- */
+    /* Tables */
     .table-responsive {
       overflow-x: auto;
       margin-top: 1rem;
       border-radius: 8px;
       border: 1px solid #e2e8f0;
     }
+    table { width: 100%; border-collapse: collapse; background: #fff; }
+    th, td { text-align: left; padding: 0.75rem 1rem; border-bottom: 1px solid #e2e8f0; font-size: 0.9rem; }
+    th { background: #f1f5f9; color: #334155; font-weight: 700; text-transform: uppercase; font-size: 0.75rem; }
     
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      background: #fff;
-    }
-    
-    th, td {
-      text-align: left;
-      padding: 0.75rem 1rem;
-      border-bottom: 1px solid #e2e8f0;
-      font-size: 0.9rem;
-    }
-    
-    th {
-      background: #f1f5f9;
-      color: #334155;
-      font-weight: 700;
-      text-transform: uppercase;
-      font-size: 0.75rem;
-      letter-spacing: 0.05em;
+    .access-code {
+        font-family: monospace;
+        font-weight: bold;
+        color: var(--primary);
+        font-size: 1.1em;
+        letter-spacing: 1px;
     }
 
-    tr:last-child td { border-bottom: none; }
-
-    @keyframes float {
-      0%, 100% { transform: translateY(0); }
-      50% { transform: translateY(-5px); }
-    }
-
-    @media (max-width: 600px) {
-      h1 { font-size: 1.8rem; flex-direction: column; }
-      .card { padding: 1.5rem; }
-    }
+    @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
   </style>
 </head>
 <body>
@@ -249,193 +204,151 @@
   <canvas id="snow-canvas"></canvas>
 
   <div class="container">
-    <h1><span>🎄</span> Secret Santa Organiser</h1>
+    <h1><span>🎅</span> Secret Santa</h1>
 
     <div id="setup-card" class="card">
       <h2>1. Create Event</h2>
-      <p class="small">Fill this in once to set up the game. 🎅</p>
+      <p class="small">Enter names to generate a unique code for each person. You will need a Master Password to see these codes later.</p>
       
-      <label for="organiserName">Organiser Name</label>
-      <input id="organiserName" type="text" placeholder="e.g. Santa Claus" />
-
-      <label for="organiserEmail">Organiser Email</label>
-      <input id="organiserEmail" type="email" placeholder="e.g. santa@northpole.com" />
-
-      <label for="participants">Participants</label>
-      <p class="small" style="margin-top:0;">Enter one per line. Format: <code>Name</code> or <code>Name &lt;email&gt;</code></p>
-      <textarea id="participants" placeholder="Rudolph <rednose@example.com>
-Dasher
-Dancer <dancer@example.com>"></textarea>
-
-      <div class="checkbox-wrapper">
-        <input type="checkbox" id="includeOrganiser" />
-        <label for="includeOrganiser">Include organiser as a participant</label>
+      <label>Master Password (for Organiser only)</label>
+      <div class="password-wrapper">
+        <input id="masterPassword" type="password" placeholder="Choose a secure password" />
+        <button type="button" class="toggle-password" onclick="togglePasswordVisibility('masterPassword')">👁️</button>
       </div>
 
-      <button id="createEventBtn">🎁 Create Event</button>
+      <label>Participants</label>
+      <p class="small" style="margin-top:0;">One name per line (e.g., "Alice", "Bob")</p>
+      <textarea id="participants" placeholder="Alice
+Bob
+Charlie"></textarea>
+
+      <button id="createEventBtn">🎁 Create & Shuffle</button>
       <div id="setupMessage" class="small"></div>
     </div>
 
-    <div id="share-card" class="card hidden">
-      <h2>2. Share with Participants</h2>
-      <p class="small">Send this link to your group. They will use their name or email to unlock their assignment.</p>
-      
-      <div style="background: #f0fdf4; padding: 1rem; border-radius: 8px; border: 1px solid #bbf7d0;">
-        <strong>Event Link:</strong><br>
-        <code id="eventLink" style="word-break: break-all; background: none; padding: 0; color: #15803d;"></code>
+    <div id="admin-card" class="card hidden">
+      <h2>Organiser Dashboard</h2>
+      <p class="small">
+        <strong>Event Created!</strong> Share the <strong>Event ID</strong> with everyone. 
+        Then, give each person their unique <strong>Access Code</strong> (via WhatsApp, Slack, etc).
+      </p>
+
+      <div style="background: #f0fdf4; padding: 1rem; border-radius: 8px; border: 1px solid #bbf7d0; margin-bottom: 1.5rem;">
+        <strong>Event ID:</strong> <span id="displayEventId" style="font-weight:bold; color:#15803d; font-size:1.2em;"></span>
+      </div>
+
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Access Code</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="adminTableBody"></tbody>
+        </table>
       </div>
       
-      <p class="small">Admin Email: <strong id="adminEmailDisplay"></strong></p>
+      <p class="small" style="margin-top:20px; border-top:1px solid #eee; padding-top:10px;">
+        To view this table again later, refresh the page and use the "Admin Login" section below.
+      </p>
     </div>
 
     <div id="participant-card" class="card">
       <h2>Participant Zone</h2>
-      <p class="small">Find out who you are gifting! 🎁</p>
+      <p class="small">Enter the Event ID and your personal Access Code to see who you got!</p>
 
-      <label for="eventIdInput">Event ID</label>
-      <input id="eventIdInput" type="text" placeholder="Auto-filled from link" />
+      <label>Event ID</label>
+      <input id="eventIdInput" type="text" placeholder="e.g. 8s7d9f" />
 
-      <label for="participantKeyInput">Your Name or Email</label>
-      <input id="participantKeyInput" type="text" placeholder="Enter exactly as signed up" />
+      <label>Your Name</label>
+      <input id="participantNameInput" type="text" placeholder="e.g. Alice" />
+      
+      <label>Your Access Code</label>
+      <input id="accessCodeInput" type="text" placeholder="e.g. X8D9S7" />
 
       <button id="viewRecipientBtn">🔍 Reveal Recipient</button>
-
       <div id="participantResult" class="small" style="margin-top: 1rem; font-size: 1.1rem;"></div>
     </div>
 
-    <div id="admin-card" class="card">
-      <h2>Organiser Dashboard</h2>
-      <p class="small">Check who has viewed their assignment.</p>
-
-      <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
-        <div style="flex: 1;">
-          <label for="adminEventIdInput">Event ID</label>
-          <input id="adminEventIdInput" type="text" />
-        </div>
-        <div style="flex: 1;">
-          <label for="adminEmailInput">Organiser Email</label>
-          <input id="adminEmailInput" type="email" />
-        </div>
-      </div>
-
-      <button id="loadAdminBtn" class="secondary">📋 Load Stats</button>
-      <div id="adminMessage" class="small"></div>
+    <div id="admin-login-card" class="card">
+      <h2>Admin Login</h2>
+      <p class="small">Organiser: Enter Event ID and your Master Password to view codes and status.</p>
       
-      <div id="adminTableWrapper" class="hidden">
-        <div class="table-responsive">
-          <table>
-            <thead>
-              <tr>
-                <th>Participant</th>
-                <th>Target</th>
-                <th>Seen?</th>
-              </tr>
-            </thead>
-            <tbody id="adminTableBody"></tbody>
-          </table>
+      <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+        <div style="flex:1; min-width: 150px;">
+            <input id="adminEventIdInput" type="text" placeholder="Event ID" />
+        </div>
+        <div style="flex:1; min-width: 150px;">
+             <div class="password-wrapper">
+              <input id="adminPassInput" type="password" placeholder="Master Password" />
+              <button type="button" class="toggle-password" onclick="togglePasswordVisibility('adminPassInput')">👁️</button>
+            </div>
         </div>
       </div>
+      
+      <button id="loadAdminBtn" class="secondary">🔓 View Codes</button>
+      <div id="adminMessage" class="small"></div>
     </div>
+
   </div>
 
   <script>
     (function() {
       const canvas = document.getElementById('snow-canvas');
       const ctx = canvas.getContext('2d');
-      let width, height;
-      let flakes = [];
-
-      function resize() {
-        width = canvas.width = window.innerWidth;
-        height = canvas.height = window.innerHeight;
-      }
+      let w, h, flakes = [];
+      const resize = () => { w=canvas.width=innerWidth; h=canvas.height=innerHeight; };
+      window.addEventListener('resize', resize);
+      resize();
 
       class Flake {
-        constructor() {
-          this.init(true);
+        constructor() { this.init(true); }
+        init(first) {
+          this.x = Math.random() * w; this.y = first ? Math.random()*h : -10;
+          this.r = Math.random()*2+1; this.s = Math.random()*1+0.5; this.d = Math.random()*w;
         }
-
-        init(firstRun = false) {
-          this.x = Math.random() * width;
-          // If first run, scatter everywhere. If recycle, start at top
-          this.y = firstRun ? Math.random() * height : -10;
-          this.r = Math.random() * 2 + 1; // Radius
-          this.d = Math.random() * width; // Density/Sway seed
-          this.s = Math.random() * 1 + 0.5; // Speed
-          this.a = Math.random() * 0.5 + 0.4; // Opacity
-        }
-
         update() {
-          this.y += this.s;
-          // Sway movement
-          this.x += Math.sin(this.d) * 0.5;
-          this.d += 0.01;
-
-          if (this.y > height) {
-            this.init(false);
-          }
+          this.y += this.s; this.x += Math.sin(this.d)*0.5; this.d+=0.01;
+          if(this.y>h) this.init(false);
         }
-
-        draw() {
-          ctx.beginPath();
-          ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(255, 255, 255, ${this.a})`;
-          ctx.fill();
-        }
+        draw() { ctx.beginPath(); ctx.arc(this.x,this.y,this.r,0,Math.PI*2); ctx.fillStyle='rgba(255,255,255,0.6)'; ctx.fill(); }
       }
-
-      function initSnow() {
-        resize();
-        flakes = [];
-        // Create 100 flakes
-        for (let i = 0; i < 100; i++) {
-          flakes.push(new Flake());
-        }
-        loop();
-      }
-
-      function loop() {
-        ctx.clearRect(0, 0, width, height);
-        for (let flake of flakes) {
-          flake.update();
-          flake.draw();
-        }
-        requestAnimationFrame(loop);
-      }
-
-      window.addEventListener('resize', resize);
-      initSnow();
+      for(let i=0; i<80; i++) flakes.push(new Flake());
+      function loop() { ctx.clearRect(0,0,w,h); flakes.forEach(f=>{f.update();f.draw()}); requestAnimationFrame(loop); }
+      loop();
     })();
+
+    // Password Toggle Helper
+    window.togglePasswordVisibility = function(id) {
+        const input = document.getElementById(id);
+        if (input.type === "password") {
+            input.type = "text";
+        } else {
+            input.type = "password";
+        }
+    }
   </script>
 
   <script type="module">
-    // TODO: replace this config with your own Firebase config
     const firebaseConfig = {
       apiKey: "AIzaSyAdevrXnZ-rfHNxXHHh-R9_aDEKzqeU1mQ",
       authDomain: "secret-santa-organiser.firebaseapp.com",
       projectId: "secret-santa-organiser",
       storageBucket: "secret-santa-organiser.firebasestorage.app",
       messagingSenderId: "851546467900",
-      appId: "1:851546467900:web:e81ee0bc4d6790bffa9d39",
-      measurementId: "G-ZBJW29F5PJ"
+      appId: "1:851546467900:web:e81ee0bc4d6790bffa9d39"
     };
 
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
-    import {
-      getFirestore,
-      doc,
-      setDoc,
-      getDoc,
-      updateDoc,
-      serverTimestamp
-    } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
+    import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
 
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    // --- Logic Helpers ---
-    function shuffle(array) {
-      const arr = array.slice();
+    // --- Helpers ---
+    function shuffle(arr) {
       for (let i = arr.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [arr[i], arr[j]] = [arr[j], arr[i]];
@@ -445,259 +358,205 @@ Dancer <dancer@example.com>"></textarea>
 
     function generateDerangement(items) {
       if (items.length < 2) return null;
-      let shuffled;
-      let attempts = 0;
+      let shuffled, attempts = 0;
       do {
-        shuffled = shuffle(items);
+        shuffled = shuffle([...items]);
         attempts++;
         if (attempts > 1000) return null;
       } while (items.some((x, i) => x === shuffled[i]));
-      const result = {};
-      items.forEach((giver, i) => {
-        result[giver] = shuffled[i];
-      });
+      const res = {};
+      items.forEach((giver, i) => res[giver] = shuffled[i]);
+      return res;
+    }
+
+    // Clean name for ID usage: "Alice Bob" -> "alicebob"
+    function normalize(str) { return str.toLowerCase().replace(/[^a-z0-9]/g, ''); }
+
+    function generateCode() {
+      const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+      let result = "";
+      for (let i = 0; i < 6; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
       return result;
     }
 
-    function parseParticipants(text, includeOrganiserName) {
-      const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
-      const participants = [];
-      lines.forEach(line => {
-        const match = line.match(/^(.*)<(.*)>$/);
-        if (match) {
-          const name = match[1].trim();
-          const email = match[2].trim();
-          participants.push({ key: email, label: `${name} <${email}>` });
-        } else {
-          participants.push({ key: line, label: line });
-        }
-      });
-      if (includeOrganiserName) {
-        participants.push({
-          key: includeOrganiserName,
-          label: includeOrganiserName
-        });
-      }
-      return participants;
-    }
-
-    // --- Actions ---
+    // --- Core Functions ---
     async function createEvent() {
-      const organiserName = document.getElementById("organiserName").value.trim();
-      const organiserEmail = document.getElementById("organiserEmail").value.trim();
-      const participantsText = document.getElementById("participants").value;
-      const includeOrganiser = document.getElementById("includeOrganiser").checked;
-      const msgEl = document.getElementById("setupMessage");
+      const masterPass = document.getElementById("masterPassword").value.trim();
+      const rawText = document.getElementById("participants").value;
+      const msg = document.getElementById("setupMessage");
 
-      msgEl.textContent = "";
-      msgEl.className = "small";
+      msg.textContent = ""; msg.className = "small";
 
-      if (!organiserName || !organiserEmail) {
-        msgEl.textContent = "Please provide organiser name and email.";
-        msgEl.classList.add("error");
-        return;
+      if (!masterPass) { msg.textContent = "Please set a Master Password."; msg.className = "error"; return; }
+
+      // Parse names
+      const names = rawText.split("\n").map(l => l.trim()).filter(Boolean);
+      
+      const uniqueNames = [...new Set(names)];
+      if (uniqueNames.length !== names.length) {
+          msg.textContent = "Duplicate names found. Please ensure all names are unique."; msg.className = "error"; return;
       }
-      const parsedParticipants = parseParticipants(
-        participantsText,
-        includeOrganiser ? organiserEmail : null
-      );
-      if (parsedParticipants.length < 2) {
-        msgEl.textContent = "You need at least 2 participants.";
-        msgEl.classList.add("error");
-        return;
-      }
+      if (uniqueNames.length < 3) { msg.textContent = "Need at least 3 participants."; msg.className = "error"; return; }
 
-      const keys = parsedParticipants.map(p => p.key);
-      const mapping = generateDerangement(keys);
-      if (!mapping) {
-        msgEl.textContent = "Could not generate valid pairs. Try different participants.";
-        msgEl.classList.add("error");
-        return;
-      }
+      // Shuffle
+      const mapping = generateDerangement(uniqueNames);
+      if (!mapping) { msg.textContent = "Shuffle failed. Try again."; msg.className = "error"; return; }
 
-      const eventId = Math.random().toString(36).slice(2, 10);
+      const eventId = Math.random().toString(36).slice(2, 8); // Shorter Event ID
+      const participantsData = {};
 
-      const participantsState = {};
-      parsedParticipants.forEach(p => {
-        participantsState[p.key] = {
-          label: p.label,
-          recipientKey: mapping[p.key],
-          viewed: false,
-          firstViewedAt: null,
-          viewCount: 0
+      uniqueNames.forEach(name => {
+        const key = normalize(name);
+        participantsData[key] = {
+          name: name,
+          recipientName: mapping[name],
+          accessCode: generateCode(),
+          viewed: false
         };
       });
 
-      const eventDoc = {
-        organiserName,
-        organiserEmail,
-        createdAt: new Date().toISOString(),
-        participants: participantsState
-      };
-
       try {
-        const createBtn = document.getElementById("createEventBtn");
-        createBtn.disabled = true;
-        createBtn.textContent = "Creating...";
+        const btn = document.getElementById("createEventBtn");
+        btn.disabled = true; btn.textContent = "Shuffling...";
         
-        await setDoc(doc(db, "secret_santa_events", eventId), eventDoc);
+        await setDoc(doc(db, "secret_santa_events", eventId), {
+          masterPassword: masterPass,
+          createdAt: new Date().toISOString(),
+          participants: participantsData
+        });
+
+        // SUCCESS: Show Admin Panel
+        document.getElementById("setup-card").classList.add("hidden");
+        document.getElementById("admin-card").classList.remove("hidden");
+        document.getElementById("displayEventId").textContent = eventId;
         
-        createBtn.disabled = false;
-        createBtn.textContent = "🎁 Create Event";
+        renderAdminTable(participantsData);
 
-        const url = new URL(window.location.href);
-        url.searchParams.set("event", eventId);
-        const eventLink = url.toString();
-
-        document.getElementById("share-card").classList.remove("hidden");
-        document.getElementById("eventLink").textContent = eventLink;
-        document.getElementById("adminEmailDisplay").textContent = organiserEmail;
-
+        // Pre-fill inputs
         document.getElementById("eventIdInput").value = eventId;
         document.getElementById("adminEventIdInput").value = eventId;
-        
-        // Scroll to share card
-        document.getElementById("share-card").scrollIntoView({behavior: 'smooth'});
-        
-      } catch (err) {
-        console.error(err);
-        msgEl.textContent = "Error: " + err.message;
-        msgEl.classList.add("error");
-        document.getElementById("createEventBtn").disabled = false;
-        document.getElementById("createEventBtn").textContent = "Create Event";
+        document.getElementById("adminPassInput").value = masterPass;
+
+      } catch (e) {
+        console.error(e);
+        msg.textContent = "Error: " + e.message;
+        btn.disabled = false;
+        btn.textContent = "🎁 Create & Shuffle";
       }
+    }
+
+    function renderAdminTable(participantsData) {
+        const tbody = document.getElementById("adminTableBody");
+        tbody.innerHTML = "";
+        
+        const sortedKeys = Object.keys(participantsData).sort((a,b) => participantsData[a].name.localeCompare(participantsData[b].name));
+
+        sortedKeys.forEach(key => {
+          const p = participantsData[key];
+          const tr = document.createElement("tr");
+          
+          tr.innerHTML = `
+            <td><strong>${p.name}</strong></td>
+            <td>
+                <span class="access-code">${p.accessCode}</span>
+                <button class="copy-btn" onclick="navigator.clipboard.writeText('${p.accessCode}'); alert('Copied: ${p.accessCode}')">📋</button>
+            </td>
+            <td>${p.viewed ? "✅ Viewed" : "<span style='color:#ccc'>Waiting</span>"}</td>
+          `;
+          tbody.appendChild(tr);
+        });
     }
 
     async function viewRecipient() {
       const eventId = document.getElementById("eventIdInput").value.trim();
-      const participantKey = document.getElementById("participantKeyInput").value.trim();
+      const nameRaw = document.getElementById("participantNameInput").value.trim();
+      const code = document.getElementById("accessCodeInput").value.trim().toUpperCase();
       const resEl = document.getElementById("participantResult");
 
-      resEl.textContent = "";
-      resEl.className = "small";
+      resEl.innerHTML = ""; resEl.className = "small";
 
-      if (!eventId || !participantKey) {
-        resEl.textContent = "Please provide Event ID and your name/email.";
-        resEl.classList.add("error");
-        return;
-      }
+      if (!eventId || !nameRaw || !code) { resEl.textContent = "All fields are required."; resEl.className = "error"; return; }
+
+      const userKey = normalize(nameRaw);
 
       try {
         const docRef = doc(db, "secret_santa_events", eventId);
         const snap = await getDoc(docRef);
-        if (!snap.exists()) {
-          resEl.textContent = "Event not found.";
-          resEl.classList.add("error");
-          return;
-        }
+        
+        if (!snap.exists()) { resEl.textContent = "Event ID not found."; resEl.className = "error"; return; }
+        
         const data = snap.data();
-        const participants = data.participants || {};
-        const participant = participants[participantKey];
+        const me = data.participants[userKey];
 
-        if (!participant) {
-          resEl.textContent = "Name not found in this event. Check spelling!";
-          resEl.classList.add("error");
+        if (!me) { resEl.textContent = "Name not found. Check spelling!"; resEl.className = "error"; return; }
+        
+        // SECURITY CHECK
+        if (me.accessCode !== code) {
+          resEl.textContent = "❌ Incorrect Access Code.";
+          resEl.className = "error";
           return;
         }
 
-        const recipientKey = participant.recipientKey;
-        const recipient = participants[recipientKey];
-        const recipientLabel = recipient ? recipient.label : recipientKey;
-
-        // Visual distinction for result
+        // 1. SHOW THE RESULT FIRST (Important so it doesn't flash)
         resEl.innerHTML = `
-          <div style="background:#e8f5e9; padding:1rem; border-radius:8px; border:1px solid #c8e6c9; margin-top:0.5rem;">
-            Your recipient is:<br/>
-            <strong style="font-size:1.3rem; color:#1b5e20;">${recipientLabel}</strong>
+          <div style="background:#e8f5e9; padding:1.5rem; border-radius:8px; border:2px solid #2e7d32; text-align:center;">
+            Hi <strong>${me.name}</strong>! You are buying for:<br>
+            <h2 style="font-size:2rem; margin:15px 0; color:#1b5e20;">${me.recipientName}</h2>
           </div>
         `;
-        
-        const newViewCount = (participant.viewCount || 0) + 1;
-        const firstViewedAt = participant.firstViewedAt || new Date().toISOString();
 
-        await updateDoc(docRef, {
-          [`participants.${participantKey}.viewed`]: true,
-          [`participants.${participantKey}.viewCount`]: newViewCount,
-          [`participants.${participantKey}.firstViewedAt`]: firstViewedAt
-        });
-      } catch (err) {
-        console.error(err);
-        resEl.textContent = "Error: " + err.message;
-        resEl.classList.add("error");
+        // 2. TRY TO UPDATE DATABASE (SILENTLY)
+        // If this fails due to permissions, we catch it silently so the user still sees their name
+        if (!me.viewed) {
+          try {
+            const newData = { ...data };
+            newData.participants[userKey].viewed = true;
+            await setDoc(docRef, newData); 
+          } catch (writeErr) {
+            console.warn("Could not save 'viewed' status (likely permission issues). This is fine for the user, but Admin won't see the checkmark.", writeErr);
+          }
+        }
+
+      } catch (e) {
+        console.error(e);
+        resEl.textContent = "Error: " + e.message; resEl.className = "error";
       }
     }
 
-    async function loadAdminView() {
+    async function loadAdmin() {
       const eventId = document.getElementById("adminEventIdInput").value.trim();
-      const adminEmail = document.getElementById("adminEmailInput").value.trim();
-      const msgEl = document.getElementById("adminMessage");
-      const tableWrapper = document.getElementById("adminTableWrapper");
-      const tbody = document.getElementById("adminTableBody");
+      const pass = document.getElementById("adminPassInput").value.trim();
+      const msg = document.getElementById("adminMessage");
+      const adminCard = document.getElementById("admin-card");
 
-      msgEl.textContent = "";
-      msgEl.className = "small";
-      tableWrapper.classList.add("hidden");
-      tbody.innerHTML = "";
+      msg.textContent = ""; msg.className = "small";
+      adminCard.classList.add("hidden");
 
-      if (!eventId || !adminEmail) {
-        msgEl.textContent = "Enter Event ID and Organiser Email.";
-        msgEl.classList.add("error");
-        return;
-      }
+      if (!eventId || !pass) { msg.textContent = "Enter Event ID and Password."; msg.className = "error"; return; }
 
       try {
-        const docRef = doc(db, "secret_santa_events", eventId);
-        const snap = await getDoc(docRef);
-        if (!snap.exists()) {
-          msgEl.textContent = "Event not found.";
-          msgEl.classList.add("error");
-          return;
-        }
+        const snap = await getDoc(doc(db, "secret_santa_events", eventId));
+        if (!snap.exists()) { msg.textContent = "Event Not Found"; msg.className = "error"; return; }
         const data = snap.data();
-        if (data.organiserEmail !== adminEmail) {
-          msgEl.textContent = "Invalid email for this event.";
-          msgEl.classList.add("error");
-          return;
+        
+        if (data.masterPassword !== pass) {
+          msg.textContent = "Wrong Password."; msg.className = "error"; return;
         }
 
-        const participants = data.participants || {};
-        const keys = Object.keys(participants).sort();
-
-        keys.forEach(key => {
-          const p = participants[key];
-          const recipient = participants[p.recipientKey];
-          const tr = document.createElement("tr");
-          // Simple columns
-          tr.innerHTML = `
-            <td><strong>${p.label || key}</strong></td>
-            <td>${recipient ? recipient.label : p.recipientKey}</td>
-            <td>${p.viewed ? "<span style='color:green'>Yes</span>" : "<span style='color:#ccc'>No</span>"}</td>
-          `;
-          tbody.appendChild(tr);
-        });
-
-        tableWrapper.classList.remove("hidden");
-        msgEl.textContent = "Stats loaded successfully.";
-        msgEl.classList.add("success");
-      } catch (err) {
-        console.error(err);
-        msgEl.textContent = "Error: " + err.message;
-        msgEl.classList.add("error");
-      }
+        adminCard.classList.remove("hidden");
+        document.getElementById("displayEventId").textContent = eventId;
+        renderAdminTable(data.participants);
+        adminCard.scrollIntoView({ behavior: 'smooth' });
+        
+      } catch (e) { console.error(e); msg.textContent = "Error: " + e.message; }
     }
 
-    // Attach listeners
     document.getElementById("createEventBtn").addEventListener("click", createEvent);
     document.getElementById("viewRecipientBtn").addEventListener("click", viewRecipient);
-    document.getElementById("loadAdminBtn").addEventListener("click", loadAdminView);
+    document.getElementById("loadAdminBtn").addEventListener("click", loadAdmin);
 
-    // Initial check for URL params
-    const params = new URLSearchParams(window.location.search);
-    const eventFromUrl = params.get("event");
-    if (eventFromUrl) {
-      document.getElementById("eventIdInput").value = eventFromUrl;
-      document.getElementById("adminEventIdInput").value = eventFromUrl;
-    }
   </script>
 </body>
 </html>
