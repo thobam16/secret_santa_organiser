@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Secret Santa - Names Only</title>
+  <title>Secret Santa - 3 Word IDs</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -123,9 +123,7 @@
       display: flex;
       align-items: center;
     }
-    .password-wrapper input {
-      padding-right: 40px; /* Make room for the eye */
-    }
+    .password-wrapper input { padding-right: 40px; }
     .toggle-password {
       position: absolute;
       right: 10px;
@@ -208,7 +206,7 @@
 
     <div id="setup-card" class="card">
       <h2>1. Create Event</h2>
-      <p class="small">Enter names to generate a unique code for each person. You will need a Master Password to see these codes later.</p>
+      <p class="small">Enter names to generate a unique code for each person.</p>
       
       <label>Master Password (for Organiser only)</label>
       <div class="password-wrapper">
@@ -229,8 +227,8 @@ Charlie"></textarea>
     <div id="admin-card" class="card hidden">
       <h2>Organiser Dashboard</h2>
       <p class="small">
-        <strong>Event Created!</strong> Share the <strong>Event ID</strong> with everyone. 
-        Then, give each person their unique <strong>Access Code</strong> (via WhatsApp, Slack, etc).
+        <strong>Event Created!</strong> Share the <strong>Event ID</strong> with the group. 
+        Then, privately send each person their <strong>Access Code</strong>.
       </p>
 
       <div style="background: #f0fdf4; padding: 1rem; border-radius: 8px; border: 1px solid #bbf7d0; margin-bottom: 1.5rem;">
@@ -251,20 +249,17 @@ Charlie"></textarea>
       </div>
       
       <p class="small" style="margin-top:20px; border-top:1px solid #eee; padding-top:10px;">
-        To view this table again later, refresh the page and use the "Admin Login" section below.
+        To view this later, refresh and use "Admin Login".
       </p>
     </div>
 
     <div id="participant-card" class="card">
       <h2>Participant Zone</h2>
-      <p class="small">Enter the Event ID and your personal Access Code to see who you got!</p>
+      <p class="small">Enter the Event ID and your unique Access Code to see who you got!</p>
 
       <label>Event ID</label>
-      <input id="eventIdInput" type="text" placeholder="e.g. 8s7d9f" />
+      <input id="eventIdInput" type="text" placeholder="e.g. jolly-red-santa" />
 
-      <label>Your Name</label>
-      <input id="participantNameInput" type="text" placeholder="e.g. Alice" />
-      
       <label>Your Access Code</label>
       <input id="accessCodeInput" type="text" placeholder="e.g. X8D9S7" />
 
@@ -274,7 +269,7 @@ Charlie"></textarea>
 
     <div id="admin-login-card" class="card">
       <h2>Admin Login</h2>
-      <p class="small">Organiser: Enter Event ID and your Master Password to view codes and status.</p>
+      <p class="small">Organiser: Login to view codes and status.</p>
       
       <div style="display: flex; gap: 10px; flex-wrap: wrap;">
         <div style="flex:1; min-width: 150px;">
@@ -320,14 +315,9 @@ Charlie"></textarea>
       loop();
     })();
 
-    // Password Toggle Helper
     window.togglePasswordVisibility = function(id) {
         const input = document.getElementById(id);
-        if (input.type === "password") {
-            input.type = "text";
-        } else {
-            input.type = "password";
-        }
+        input.type = input.type === "password" ? "text" : "password";
     }
   </script>
 
@@ -369,7 +359,6 @@ Charlie"></textarea>
       return res;
     }
 
-    // Clean name for ID usage: "Alice Bob" -> "alicebob"
     function normalize(str) { return str.toLowerCase().replace(/[^a-z0-9]/g, ''); }
 
     function generateCode() {
@@ -381,7 +370,28 @@ Charlie"></textarea>
       return result;
     }
 
-    // --- Core Functions ---
+    function generateChristmasId() {
+        const mood = [
+            "jolly", "merry", "happy", "lucky", "magic", "sweet", "festive", 
+            "brave", "super", "best", "cozy", "warm", "bouncy"
+        ];
+        const quality = [
+            "red", "green", "gold", "silver", "white", "snowy", "frosty", 
+            "shiny", "fuzzy", "glowing", "sparkly", "tiny", "flying", "winter"
+        ];
+        const noun = [
+            "santa", "elf", "reindeer", "snowman", "gift", "star", "tree", 
+            "bell", "sleigh", "candy", "cookie", "cake", "pudding", "turkey", 
+            "robin", "wreath", "holly", "ivy", "bauble", "tinsel", "flake"
+        ];
+        
+        const m = mood[Math.floor(Math.random() * mood.length)];
+        const q = quality[Math.floor(Math.random() * quality.length)];
+        const n = noun[Math.floor(Math.random() * noun.length)];
+        
+        return `${m}-${q}-${n}`;
+    }
+
     async function createEvent() {
       const masterPass = document.getElementById("masterPassword").value.trim();
       const rawText = document.getElementById("participants").value;
@@ -391,20 +401,15 @@ Charlie"></textarea>
 
       if (!masterPass) { msg.textContent = "Please set a Master Password."; msg.className = "error"; return; }
 
-      // Parse names
       const names = rawText.split("\n").map(l => l.trim()).filter(Boolean);
-      
       const uniqueNames = [...new Set(names)];
-      if (uniqueNames.length !== names.length) {
-          msg.textContent = "Duplicate names found. Please ensure all names are unique."; msg.className = "error"; return;
-      }
+      
       if (uniqueNames.length < 3) { msg.textContent = "Need at least 3 participants."; msg.className = "error"; return; }
 
-      // Shuffle
       const mapping = generateDerangement(uniqueNames);
       if (!mapping) { msg.textContent = "Shuffle failed. Try again."; msg.className = "error"; return; }
 
-      const eventId = Math.random().toString(36).slice(2, 8); // Shorter Event ID
+      const eventId = generateChristmasId(); // 3-Word ID
       const participantsData = {};
 
       uniqueNames.forEach(name => {
@@ -427,14 +432,13 @@ Charlie"></textarea>
           participants: participantsData
         });
 
-        // SUCCESS: Show Admin Panel
         document.getElementById("setup-card").classList.add("hidden");
         document.getElementById("admin-card").classList.remove("hidden");
         document.getElementById("displayEventId").textContent = eventId;
         
         renderAdminTable(participantsData);
-
-        // Pre-fill inputs
+        
+        // Auto-fill inputs
         document.getElementById("eventIdInput").value = eventId;
         document.getElementById("adminEventIdInput").value = eventId;
         document.getElementById("adminPassInput").value = masterPass;
@@ -450,18 +454,16 @@ Charlie"></textarea>
     function renderAdminTable(participantsData) {
         const tbody = document.getElementById("adminTableBody");
         tbody.innerHTML = "";
-        
         const sortedKeys = Object.keys(participantsData).sort((a,b) => participantsData[a].name.localeCompare(participantsData[b].name));
 
         sortedKeys.forEach(key => {
           const p = participantsData[key];
           const tr = document.createElement("tr");
-          
           tr.innerHTML = `
             <td><strong>${p.name}</strong></td>
             <td>
                 <span class="access-code">${p.accessCode}</span>
-                <button class="copy-btn" onclick="navigator.clipboard.writeText('${p.accessCode}'); alert('Copied: ${p.accessCode}')">📋</button>
+                <button class="copy-btn" onclick="navigator.clipboard.writeText('${p.accessCode}'); alert('Copied code for ${p.name}')">📋</button>
             </td>
             <td>${p.viewed ? "✅ Viewed" : "<span style='color:#ccc'>Waiting</span>"}</td>
           `;
@@ -470,36 +472,42 @@ Charlie"></textarea>
     }
 
     async function viewRecipient() {
-      const eventId = document.getElementById("eventIdInput").value.trim();
-      const nameRaw = document.getElementById("participantNameInput").value.trim();
+      const eventId = document.getElementById("eventIdInput").value.trim().toLowerCase();
       const code = document.getElementById("accessCodeInput").value.trim().toUpperCase();
       const resEl = document.getElementById("participantResult");
 
       resEl.innerHTML = ""; resEl.className = "small";
 
-      if (!eventId || !nameRaw || !code) { resEl.textContent = "All fields are required."; resEl.className = "error"; return; }
-
-      const userKey = normalize(nameRaw);
+      if (!eventId || !code) { resEl.textContent = "Event ID and Access Code required."; resEl.className = "error"; return; }
 
       try {
         const docRef = doc(db, "secret_santa_events", eventId);
         const snap = await getDoc(docRef);
         
-        if (!snap.exists()) { resEl.textContent = "Event ID not found."; resEl.className = "error"; return; }
+        if (!snap.exists()) { resEl.textContent = "Event ID not found (check spelling!)."; resEl.className = "error"; return; }
         
         const data = snap.data();
-        const me = data.participants[userKey];
-
-        if (!me) { resEl.textContent = "Name not found. Check spelling!"; resEl.className = "error"; return; }
+        const participants = data.participants || {};
         
-        // SECURITY CHECK
-        if (me.accessCode !== code) {
-          resEl.textContent = "❌ Incorrect Access Code.";
+        // FIND PARTICIPANT BY CODE
+        let me = null;
+        let myKey = null;
+
+        for (const [key, p] of Object.entries(participants)) {
+            if (p.accessCode === code) {
+                me = p;
+                myKey = key;
+                break;
+            }
+        }
+
+        if (!me) {
+          resEl.textContent = "❌ Invalid Access Code.";
           resEl.className = "error";
           return;
         }
 
-        // 1. SHOW THE RESULT FIRST (Important so it doesn't flash)
+        // SHOW RESULT IMMEDIATELY
         resEl.innerHTML = `
           <div style="background:#e8f5e9; padding:1.5rem; border-radius:8px; border:2px solid #2e7d32; text-align:center;">
             Hi <strong>${me.name}</strong>! You are buying for:<br>
@@ -507,15 +515,14 @@ Charlie"></textarea>
           </div>
         `;
 
-        // 2. TRY TO UPDATE DATABASE (SILENTLY)
-        // If this fails due to permissions, we catch it silently so the user still sees their name
+        // UPDATE DB SILENTLY
         if (!me.viewed) {
           try {
             const newData = { ...data };
-            newData.participants[userKey].viewed = true;
+            newData.participants[myKey].viewed = true;
             await setDoc(docRef, newData); 
           } catch (writeErr) {
-            console.warn("Could not save 'viewed' status (likely permission issues). This is fine for the user, but Admin won't see the checkmark.", writeErr);
+            console.warn("Viewed status save failed (permission issue). User still saw result.", writeErr);
           }
         }
 
@@ -526,7 +533,7 @@ Charlie"></textarea>
     }
 
     async function loadAdmin() {
-      const eventId = document.getElementById("adminEventIdInput").value.trim();
+      const eventId = document.getElementById("adminEventIdInput").value.trim().toLowerCase();
       const pass = document.getElementById("adminPassInput").value.trim();
       const msg = document.getElementById("adminMessage");
       const adminCard = document.getElementById("admin-card");
