@@ -5,506 +5,409 @@
   <title>Secret Santa Organiser</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <!-- Optional: a slightly more playful font -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@500;700&display=swap" rel="stylesheet">
 
   <style>
-  :root {
-    --xmas-red: #c62828;
-    --xmas-red-dark: #8e0000;
-    --xmas-green: #2e7d32;
-    --xmas-green-dark: #1b5e20;
-    --xmas-gold: #ffca28;
-    --xmas-cream: #fff8e1;
-    --bg-dark: #04131f;
-  }
-
-  * {
-    box-sizing: border-box;
-  }
-
-  body {
-    font-family: "Quicksand", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    max-width: 960px;
-    margin: 0 auto;
-    padding: 1.5rem;
-    background:
-      radial-gradient(circle at top left, rgba(255, 255, 255, 0.08), transparent 55%),
-      radial-gradient(circle at top right, rgba(255, 255, 255, 0.06), transparent 55%),
-      radial-gradient(circle at bottom, rgba(255, 255, 255, 0.05), transparent 55%),
-      linear-gradient(160deg, #02111d, #062a34 40%, #0a1f3b);
-    color: #fdfdfd;
-    min-height: 100vh;
-    position: relative;
-    overflow-x: hidden;
-    /* Let snow flow all the way across */
-  }
-
-  /* --- SUPER HEAVY FALLING SNOW --- */
-  body::before,
-  body::after {
-    content: "";
-    pointer-events: none;
-    position: fixed;
-    top: -150%;
-    left: -50%;
-    width: 250%;
-    height: 350%;
-    z-index: -1;
-  }
-
-  /* Front, big & bright flakes */
-  body::before {
-    background-image:
-      radial-gradient(4px 4px at 5% 10%, rgba(255,255,255,1) 50%, transparent 50%),
-      radial-gradient(4px 4px at 15% 40%, rgba(255,255,255,0.95) 50%, transparent 50%),
-      radial-gradient(4px 4px at 25% 80%, rgba(255,255,255,0.9) 50%, transparent 50%),
-      radial-gradient(4px 4px at 35% 20%, rgba(255,255,255,1) 50%, transparent 50%),
-      radial-gradient(4px 4px at 45% 60%, rgba(255,255,255,0.95) 50%, transparent 50%),
-      radial-gradient(4px 4px at 55% 90%, rgba(255,255,255,1) 50%, transparent 50%),
-      radial-gradient(4px 4px at 65% 30%, rgba(255,255,255,0.95) 50%, transparent 50%),
-      radial-gradient(4px 4px at 75% 70%, rgba(255,255,255,1) 50%, transparent 50%),
-      radial-gradient(4px 4px at 85% 50%, rgba(255,255,255,0.95) 50%, transparent 50%),
-      radial-gradient(4px 4px at 95% 15%, rgba(255,255,255,1) 50%, transparent 50%),
-      radial-gradient(3px 3px at 10% 90%, rgba(255,255,255,0.9) 50%, transparent 50%),
-      radial-gradient(3px 3px at 30% 10%, rgba(255,255,255,0.9) 50%, transparent 50%),
-      radial-gradient(3px 3px at 50% 40%, rgba(255,255,255,0.9) 50%, transparent 50%),
-      radial-gradient(3px 3px at 70% 85%, rgba(255,255,255,0.9) 50%, transparent 50%),
-      radial-gradient(3px 3px at 90% 35%, rgba(255,255,255,0.9) 50%, transparent 50%);
-    opacity: 0.95;
-    animation: snow-fall-heavy 16s linear infinite;
-  }
-  
-  /* Back, dense field of smaller flakes */
-  body::after {
-    background-image:
-      radial-gradient(2px 2px at 2% 5%, rgba(255,255,255,0.8) 50%, transparent 50%),
-      radial-gradient(2px 2px at 8% 30%, rgba(255,255,255,0.75) 50%, transparent 50%),
-      radial-gradient(2px 2px at 12% 70%, rgba(255,255,255,0.8) 50%, transparent 50%),
-      radial-gradient(2px 2px at 18% 50%, rgba(255,255,255,0.7) 50%, transparent 50%),
-      radial-gradient(2px 2px at 22% 15%, rgba(255,255,255,0.8) 50%, transparent 50%),
-      radial-gradient(2px 2px at 28% 85%, rgba(255,255,255,0.75) 50%, transparent 50%),
-      radial-gradient(2px 2px at 32% 40%, rgba(255,255,255,0.8) 50%, transparent 50%),
-      radial-gradient(2px 2px at 38% 75%, rgba(255,255,255,0.7) 50%, transparent 50%),
-      radial-gradient(2px 2px at 42% 20%, rgba(255,255,255,0.8) 50%, transparent 50%),
-      radial-gradient(2px 2px at 48% 60%, rgba(255,255,255,0.7) 50%, transparent 50%),
-      radial-gradient(2px 2px at 52% 90%, rgba(255,255,255,0.8) 50%, transparent 50%),
-      radial-gradient(2px 2px at 58% 35%, rgba(255,255,255,0.75) 50%, transparent 50%),
-      radial-gradient(2px 2px at 62% 10%, rgba(255,255,255,0.8) 50%, transparent 50%),
-      radial-gradient(2px 2px at 68% 80%, rgba(255,255,255,0.75) 50%, transparent 50%),
-      radial-gradient(2px 2px at 72% 55%, rgba(255,255,255,0.7) 50%, transparent 50%),
-      radial-gradient(2px 2px at 78% 25%, rgba(255,255,255,0.8) 50%, transparent 50%),
-      radial-gradient(2px 2px at 82% 65%, rgba(255,255,255,0.75) 50%, transparent 50%),
-      radial-gradient(2px 2px at 88% 45%, rgba(255,255,255,0.8) 50%, transparent 50%),
-      radial-gradient(2px 2px at 92% 75%, rgba(255,255,255,0.7) 50%, transparent 50%),
-      radial-gradient(2px 2px at 96% 20%, rgba(255,255,255,0.8) 50%, transparent 50%);
-    opacity: 0.85;
-    animation: snow-fall-heavy 28s linear infinite;
-  }
-  
-  /* Optional third layer: tiny slow flakes on <html> for extra depth */
-  html::before {
-    content: "";
-    pointer-events: none;
-    position: fixed;
-    top: -150%;
-    left: -50%;
-    width: 250%;
-    height: 350%;
-    z-index: -2;
-    background-image:
-      radial-gradient(1.5px 1.5px at 10% 10%, rgba(255,255,255,0.5) 50%, transparent 50%),
-      radial-gradient(1.5px 1.5px at 20% 50%, rgba(255,255,255,0.5) 50%, transparent 50%),
-      radial-gradient(1.5px 1.5px at 30% 80%, rgba(255,255,255,0.5) 50%, transparent 50%),
-      radial-gradient(1.5px 1.5px at 40% 30%, rgba(255,255,255,0.5) 50%, transparent 50%),
-      radial-gradient(1.5px 1.5px at 50% 60%, rgba(255,255,255,0.5) 50%, transparent 50%),
-      radial-gradient(1.5px 1.5px at 60% 15%, rgba(255,255,255,0.5) 50%, transparent 50%),
-      radial-gradient(1.5px 1.5px at 70% 45%, rgba(255,255,255,0.5) 50%, transparent 50%),
-      radial-gradient(1.5px 1.5px at 80% 75%, rgba(255,255,255,0.5) 50%, transparent 50%),
-      radial-gradient(1.5px 1.5px at 90% 25%, rgba(255,255,255,0.5) 50%, transparent 50%);
-    opacity: 0.5;
-    animation: snow-fall-heavy 40s linear infinite;
-  }
-  
-  /* Heavier, slightly drifting fall */
-  @keyframes snow-fall-heavy {
-    0% {
-      transform: translate3d(0, 0, 0);
+    :root {
+      --primary: #d32f2f;       /* Santa Red */
+      --secondary: #1b5e20;     /* Pine Green */
+      --accent: #ffb300;        /* Gold */
+      --bg-gradient-start: #0f172a;
+      --bg-gradient-end: #1e293b;
+      --card-bg: rgba(255, 255, 255, 0.95);
+      --text-main: #2c3e50;
     }
-    50% {
-      transform: translate3d(-5%, 25%, 0);
-    }
-    100% {
-      transform: translate3d(5%, 55%, 0);
-    }
-  }
 
+    * { box-sizing: border-box; }
 
-  h1, h2, h3 {
-    text-align: center;
-    margin-top: 0;
-    margin-bottom: 0.75rem;
-  }
-
-  h1 {
-    font-size: 2.3rem;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--xmas-gold);
-    text-shadow: 0 0 10px rgba(0, 0, 0, 0.6);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-  }
-
-  h1::before,
-  h1::after {
-    content: "🎄";
-    font-size: 1.5rem;
-  }
-
-  h2 {
-    color: var(--xmas-red);
-    font-size: 1.1rem;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-  }
-
-  h3 {
-    color: var(--xmas-green);
-    font-size: 1rem;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-  }
-
-  .card {
-    background: radial-gradient(circle at top, var(--xmas-cream), #ffe0b2);
-    border-radius: 16px;
-    padding: 1.25rem 1.5rem 1.5rem;
-    margin-bottom: 1.5rem;
-    box-shadow:
-      0 18px 40px rgba(0, 0, 0, 0.35),
-      0 0 0 2px rgba(255, 255, 255, 0.05);
-    border: 2px solid rgba(255, 255, 255, 0.7);
-    position: relative;
-    overflow: hidden;
-    color: #333;
-  }
-
-  .card::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background-image:
-      linear-gradient(135deg, rgba(198, 40, 40, 0.08) 25%, transparent 25%, transparent 50%, rgba(198, 40, 40, 0.08) 50%, rgba(198, 40, 40, 0.08) 75%, transparent 75%, transparent);
-    background-size: 22px 22px;
-    opacity: 0.25;
-    pointer-events: none;
-    mix-blend-mode: soft-light;
-  }
-
-  .card > * {
-    position: relative;
-    z-index: 1;
-  }
-
-  .card:nth-of-type(odd) {
-    border-image: linear-gradient(135deg, var(--xmas-red), var(--xmas-green)) 1;
-  }
-
-  label {
-    display: block;
-    margin-top: 0.75rem;
-    font-weight: 600;
-    color: #4a2b10;
-  }
-
-  /* --- FIX CHECKBOX ALIGNMENT --- */
-  .row label {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    margin-top: 0.25rem;
-  }
-
-  input[type="checkbox"] {
-    width: auto;
-    margin: 0;
-    flex-shrink: 0;
-  }
-  /* --- end checkbox tweak --- */
-
-  input, textarea, button {
-    font: inherit;
-  }
-
-  input:not([type="checkbox"]), textarea {
-    width: 100%;
-    padding: 0.6rem 0.7rem;
-    margin-top: 0.25rem;
-    border-radius: 999px;
-    border: 2px solid rgba(0, 0, 0, 0.08);
-    box-sizing: border-box;
-    background: rgba(255, 255, 255, 0.9);
-    outline: none;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
-  }
-
-  textarea {
-    min-height: 120px;
-    resize: vertical;
-    border-radius: 14px;
-  }
-
-  input:not([type="checkbox"]):focus,
-  textarea:focus {
-    border-color: var(--xmas-green);
-    box-shadow: 0 0 0 2px rgba(46, 125, 50, 0.25);
-    background: #ffffff;
-  }
-
-  button {
-    margin-top: 1rem;
-    padding: 0.65rem 1.4rem;
-    border-radius: 999px;
-    border: none;
-    cursor: pointer;
-    font-weight: 700;
-    background: linear-gradient(135deg, var(--xmas-green), var(--xmas-green-dark));
-    color: white;
-    box-shadow: 0 8px 15px rgba(0, 0, 0, 0.3);
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    font-size: 0.85rem;
-    transition: transform 0.08s ease, box-shadow 0.08s ease, filter 0.08s ease;
-  }
-
-  button::before {
-    content: "🎁";
-    font-size: 1rem;
-  }
-
-  button.secondary {
-    background: linear-gradient(135deg, var(--xmas-red), var(--xmas-red-dark));
-  }
-
-  button:hover:not(:disabled) {
-    transform: translateY(-1px);
-    box-shadow: 0 10px 18px rgba(0, 0, 0, 0.4);
-    filter: brightness(1.03);
-  }
-
-  button:active:not(:disabled) {
-    transform: translateY(0);
-    box-shadow: 0 6px 10px rgba(0, 0, 0, 0.3) inset;
-  }
-
-  button:disabled {
-    opacity: 0.65;
-    cursor: not-allowed;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2) inset;
-    filter: grayscale(0.2);
-  }
-
-  .hidden {
-    display: none;
-  }
-
-  .small {
-    font-size: 0.9rem;
-    color: #5a452a;
-  }
-
-  .error {
-    color: #b00020;
-    margin-top: 0.5rem;
-    font-weight: 600;
-  }
-
-  .success {
-    color: var(--xmas-green-dark);
-    margin-top: 0.5rem;
-    font-weight: 600;
-  }
-
-  .row {
-    display: flex;
-    gap: 1rem;
-    flex-wrap: wrap;
-    margin-top: 0.5rem;
-  }
-
-  .row > div {
-    flex: 1 1 250px;
-  }
-
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 0.5rem;
-    border-radius: 12px;
-    overflow: hidden;
-    background: rgba(255, 255, 255, 0.9);
-  }
-
-  th, td {
-    border: 1px solid rgba(0, 0, 0, 0.06);
-    padding: 0.45rem 0.5rem;
-    text-align: left;
-    font-size: 0.88rem;
-  }
-
-  th {
-    background: linear-gradient(135deg, var(--xmas-red), var(--xmas-green));
-    color: white;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    font-size: 0.75rem;
-  }
-
-  tr:nth-child(even) td {
-    background: rgba(0, 0, 0, 0.02);
-  }
-
-  code {
-    background: rgba(0, 0, 0, 0.08);
-    padding: 0.12rem 0.35rem;
-    border-radius: 4px;
-    font-size: 0.9rem;
-    font-family: "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-    color: #2e2e2e;
-  }
-
-  .card h2 + p.small::before {
-    content: "⛄ ";
-  }
-
-  .card h2 + p.small::after {
-    content: " 🎅";
-  }
-
-  @media (max-width: 600px) {
     body {
-      padding: 1rem 0.75rem 1.5rem;
+      margin: 0;
+      padding: 0;
+      font-family: "Quicksand", sans-serif;
+      min-height: 100vh;
+      color: var(--text-main);
+      background: radial-gradient(circle at 50% 0%, #1e3a8a 0%, #0f172a 100%);
+      overflow-x: hidden;
+    }
+
+    /* --- CANVAS SNOW LAYER --- */
+    #snow-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* --- LAYOUT --- */
+    .container {
+      position: relative;
+      z-index: 1; /* Above snow */
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 2rem 1rem;
     }
 
     h1 {
-      font-size: 1.85rem;
+      text-align: center;
+      color: #fff;
+      font-size: 2.5rem;
+      margin-bottom: 2rem;
+      text-shadow: 0 4px 10px rgba(0,0,0,0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    
+    h1 span { display: inline-block; animation: float 3s ease-in-out infinite; }
+    
+    h2 {
+      margin-top: 0;
+      color: var(--secondary);
+      font-size: 1.4rem;
+      border-bottom: 2px solid #e0e0e0;
+      padding-bottom: 0.5rem;
+      margin-bottom: 1rem;
     }
 
+    h3 { margin: 0 0 0.5rem 0; color: var(--primary); }
+
+    /* --- CARDS --- */
     .card {
-      padding: 1rem 1.1rem 1.25rem;
+      background: var(--card-bg);
+      border-radius: 16px;
+      padding: 2rem;
+      margin-bottom: 2rem;
+      box-shadow: 
+        0 20px 25px -5px rgba(0, 0, 0, 0.2), 
+        0 8px 10px -6px rgba(0, 0, 0, 0.2);
+      border: 1px solid rgba(255,255,255,0.3);
+      backdrop-filter: blur(10px);
+      transition: transform 0.2s ease;
     }
-  }
-  </style>
 
+    /* --- FORMS & INPUTS --- */
+    label {
+      display: block;
+      margin-top: 1rem;
+      font-weight: 700;
+      font-size: 0.9rem;
+      color: #4a5568;
+      margin-bottom: 0.3rem;
+    }
+
+    input[type="text"],
+    input[type="email"],
+    textarea {
+      width: 100%;
+      padding: 0.8rem 1rem;
+      border-radius: 8px;
+      border: 2px solid #cbd5e1;
+      font-family: inherit;
+      font-size: 1rem;
+      transition: all 0.2s;
+      background: #f8fafc;
+    }
+
+    input:focus, textarea:focus {
+      outline: none;
+      border-color: var(--secondary);
+      background: #fff;
+      box-shadow: 0 0 0 3px rgba(27, 94, 32, 0.1);
+    }
+
+    textarea {
+      min-height: 120px;
+      resize: vertical;
+      line-height: 1.5;
+    }
+
+    /* Checkbox Styling */
+    .checkbox-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: 1rem;
+      cursor: pointer;
+    }
+    input[type="checkbox"] {
+      width: 1.2rem;
+      height: 1.2rem;
+      accent-color: var(--secondary);
+      cursor: pointer;
+    }
+    .checkbox-wrapper label {
+      margin: 0; /* Override default label margin */
+      cursor: pointer;
+    }
+
+    /* --- BUTTONS --- */
+    button {
+      background: linear-gradient(135deg, var(--secondary), #2e7d32);
+      color: white;
+      border: none;
+      padding: 0.8rem 1.5rem;
+      border-radius: 50px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 1.5rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+      transition: transform 0.1s, box-shadow 0.1s;
+    }
+
+    button:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2);
+    }
+
+    button:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    button:disabled {
+      background: #94a3b8;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* --- UTILS --- */
+    .hidden { display: none; }
+    
+    .small {
+      font-size: 0.9rem;
+      color: #64748b;
+      margin-top: 0.5rem;
+      line-height: 1.4;
+    }
+    
+    .error { color: #d32f2f; font-weight: bold; }
+    .success { color: #2e7d32; font-weight: bold; }
+
+    code {
+      background: #e2e8f0;
+      padding: 0.2rem 0.4rem;
+      border-radius: 4px;
+      font-family: monospace;
+      color: #c02525;
+      font-weight: bold;
+    }
+
+    /* --- TABLES --- */
+    .table-responsive {
+      overflow-x: auto;
+      margin-top: 1rem;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+    }
+    
+    th, td {
+      text-align: left;
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid #e2e8f0;
+      font-size: 0.9rem;
+    }
+    
+    th {
+      background: #f1f5f9;
+      color: #334155;
+      font-weight: 700;
+      text-transform: uppercase;
+      font-size: 0.75rem;
+      letter-spacing: 0.05em;
+    }
+
+    tr:last-child td { border-bottom: none; }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-5px); }
+    }
+
+    @media (max-width: 600px) {
+      h1 { font-size: 1.8rem; flex-direction: column; }
+      .card { padding: 1.5rem; }
+    }
+  </style>
 </head>
 <body>
-  <h1>Secret Santa Organiser</h1>
 
-  <!-- Setup Panel (organiser) -->
-  <div id="setup-card" class="card">
-    <h2>1. Create a new Secret Santa event</h2>
-    <p class="small">
-      Fill this in once as the organiser. You can participate as well – the elves approve. 🎅
-    </p>
-    <label for="organiserName">Organiser name</label>
-    <input id="organiserName" type="text" placeholder="e.g. Alice" />
+  <canvas id="snow-canvas"></canvas>
 
-    <label for="organiserEmail">Organiser email (for admin access)</label>
-    <input id="organiserEmail" type="email" placeholder="e.g. alice@example.com" />
+  <div class="container">
+    <h1><span>🎄</span> Secret Santa Organiser</h1>
 
-    <label for="participants">
-      Participants (one per line, use a simple format like <code>Name &lt;email&gt;</code> or just a unique name)
-    </label>
-    <textarea id="participants" placeholder="Alice &lt;alice@example.com&gt;
-Bob &lt;bob@example.com&gt;
-Charlie &lt;charlie@example.com&gt;"></textarea>
+    <div id="setup-card" class="card">
+      <h2>1. Create Event</h2>
+      <p class="small">Fill this in once to set up the game. 🎅</p>
+      
+      <label for="organiserName">Organiser Name</label>
+      <input id="organiserName" type="text" placeholder="e.g. Santa Claus" />
 
-    <div class="row">
-      <div>
-        <label>
-          <input type="checkbox" id="includeOrganiser" />
-          Include organiser as a participant
-        </label>
+      <label for="organiserEmail">Organiser Email</label>
+      <input id="organiserEmail" type="email" placeholder="e.g. santa@northpole.com" />
+
+      <label for="participants">Participants</label>
+      <p class="small" style="margin-top:0;">Enter one per line. Format: <code>Name</code> or <code>Name &lt;email&gt;</code></p>
+      <textarea id="participants" placeholder="Rudolph <rednose@example.com>
+Dasher
+Dancer <dancer@example.com>"></textarea>
+
+      <div class="checkbox-wrapper">
+        <input type="checkbox" id="includeOrganiser" />
+        <label for="includeOrganiser">Include organiser as a participant</label>
+      </div>
+
+      <button id="createEventBtn">🎁 Create Event</button>
+      <div id="setupMessage" class="small"></div>
+    </div>
+
+    <div id="share-card" class="card hidden">
+      <h2>2. Share with Participants</h2>
+      <p class="small">Send this link to your group. They will use their name or email to unlock their assignment.</p>
+      
+      <div style="background: #f0fdf4; padding: 1rem; border-radius: 8px; border: 1px solid #bbf7d0;">
+        <strong>Event Link:</strong><br>
+        <code id="eventLink" style="word-break: break-all; background: none; padding: 0; color: #15803d;"></code>
+      </div>
+      
+      <p class="small">Admin Email: <strong id="adminEmailDisplay"></strong></p>
+    </div>
+
+    <div id="participant-card" class="card">
+      <h2>Participant Zone</h2>
+      <p class="small">Find out who you are gifting! 🎁</p>
+
+      <label for="eventIdInput">Event ID</label>
+      <input id="eventIdInput" type="text" placeholder="Auto-filled from link" />
+
+      <label for="participantKeyInput">Your Name or Email</label>
+      <input id="participantKeyInput" type="text" placeholder="Enter exactly as signed up" />
+
+      <button id="viewRecipientBtn">🔍 Reveal Recipient</button>
+
+      <div id="participantResult" class="small" style="margin-top: 1rem; font-size: 1.1rem;"></div>
+    </div>
+
+    <div id="admin-card" class="card">
+      <h2>Organiser Dashboard</h2>
+      <p class="small">Check who has viewed their assignment.</p>
+
+      <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+        <div style="flex: 1;">
+          <label for="adminEventIdInput">Event ID</label>
+          <input id="adminEventIdInput" type="text" />
+        </div>
+        <div style="flex: 1;">
+          <label for="adminEmailInput">Organiser Email</label>
+          <input id="adminEmailInput" type="email" />
+        </div>
+      </div>
+
+      <button id="loadAdminBtn" class="secondary">📋 Load Stats</button>
+      <div id="adminMessage" class="small"></div>
+      
+      <div id="adminTableWrapper" class="hidden">
+        <div class="table-responsive">
+          <table>
+            <thead>
+              <tr>
+                <th>Participant</th>
+                <th>Target</th>
+                <th>Seen?</th>
+              </tr>
+            </thead>
+            <tbody id="adminTableBody"></tbody>
+          </table>
+        </div>
       </div>
     </div>
-
-    <button id="createEventBtn">Create Secret Santa</button>
-    <div id="setupMessage" class="small"></div>
   </div>
 
-  <!-- Share Details -->
-  <div id="share-card" class="card hidden">
-    <h2>2. Share with participants</h2>
-    <p class="small">
-      Send this link to everyone taking part. They’ll use their name/email to find their lucky recipient.
-    </p>
-    <p>
-      Event link: <code id="eventLink"></code>
-    </p>
-    <p class="small">
-      Admin email: <code id="adminEmailDisplay"></code> (use this below to view stats)
-    </p>
-  </div>
+  <script>
+    (function() {
+      const canvas = document.getElementById('snow-canvas');
+      const ctx = canvas.getContext('2d');
+      let width, height;
+      let flakes = [];
 
-  <!-- Participant View -->
-  <div id="participant-card" class="card">
-    <h2>Participant: see your recipient</h2>
-    <p class="small">
-      If you're a participant, enter your name/email exactly as the organiser used for you – no peeking at others’ gifts! 🎁
-    </p>
+      function resize() {
+        width = canvas.width = window.innerWidth;
+        height = canvas.height = window.innerHeight;
+      }
 
-    <label for="eventIdInput">Event ID</label>
-    <input id="eventIdInput" type="text" placeholder="Event ID from link (auto-filled if you used the link)" />
+      class Flake {
+        constructor() {
+          this.init(true);
+        }
 
-    <label for="participantKeyInput">Your name/email</label>
-    <input id="participantKeyInput" type="text" placeholder="e.g. alice@example.com or Alice" />
+        init(firstRun = false) {
+          this.x = Math.random() * width;
+          // If first run, scatter everywhere. If recycle, start at top
+          this.y = firstRun ? Math.random() * height : -10;
+          this.r = Math.random() * 2 + 1; // Radius
+          this.d = Math.random() * width; // Density/Sway seed
+          this.s = Math.random() * 1 + 0.5; // Speed
+          this.a = Math.random() * 0.5 + 0.4; // Opacity
+        }
 
-    <button id="viewRecipientBtn">View my recipient</button>
+        update() {
+          this.y += this.s;
+          // Sway movement
+          this.x += Math.sin(this.d) * 0.5;
+          this.d += 0.01;
 
-    <div id="participantResult" class="small"></div>
-  </div>
+          if (this.y > height) {
+            this.init(false);
+          }
+        }
 
-  <!-- Admin / Organiser Dashboard -->
-  <div id="admin-card" class="card">
-    <h2>Organiser dashboard</h2>
-    <p class="small">
-      See who has already viewed their recipient. Use the same organiser email as in setup – Santa needs to keep track. 🧝
-    </p>
+        draw() {
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(255, 255, 255, ${this.a})`;
+          ctx.fill();
+        }
+      }
 
-    <label for="adminEventIdInput">Event ID</label>
-    <input id="adminEventIdInput" type="text" placeholder="Event ID" />
+      function initSnow() {
+        resize();
+        flakes = [];
+        // Create 100 flakes
+        for (let i = 0; i < 100; i++) {
+          flakes.push(new Flake());
+        }
+        loop();
+      }
 
-    <label for="adminEmailInput">Organiser email</label>
-    <input id="adminEmailInput" type="email" placeholder="Organiser email" />
+      function loop() {
+        ctx.clearRect(0, 0, width, height);
+        for (let flake of flakes) {
+          flake.update();
+          flake.draw();
+        }
+        requestAnimationFrame(loop);
+      }
 
-    <button id="loadAdminBtn">Load event stats</button>
-    <div id="adminMessage" class="small"></div>
-    <div id="adminTableWrapper" class="hidden">
-      <h3>Participants &amp; views</h3>
-      <table>
-        <thead>
-          <tr>
-            <th>Participant</th>
-            <th>Recipient</th>
-            <th>Viewed?</th>
-            <th>First viewed at</th>
-            <th>Times viewed</th>
-          </tr>
-        </thead>
-        <tbody id="adminTableBody"></tbody>
-      </table>
-    </div>
-  </div>
+      window.addEventListener('resize', resize);
+      initSnow();
+    })();
+  </script>
 
-  <!-- Firebase SDKs -->
   <script type="module">
     // TODO: replace this config with your own Firebase config
     const firebaseConfig = {
@@ -530,6 +433,7 @@ Charlie &lt;charlie@example.com&gt;"></textarea>
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
+    // --- Logic Helpers ---
     function shuffle(array) {
       const arr = array.slice();
       for (let i = arr.length - 1; i > 0; i--) {
@@ -577,6 +481,7 @@ Charlie &lt;charlie@example.com&gt;"></textarea>
       return participants;
     }
 
+    // --- Actions ---
     async function createEvent() {
       const organiserName = document.getElementById("organiserName").value.trim();
       const organiserEmail = document.getElementById("organiserEmail").value.trim();
@@ -605,7 +510,7 @@ Charlie &lt;charlie@example.com&gt;"></textarea>
       const keys = parsedParticipants.map(p => p.key);
       const mapping = generateDerangement(keys);
       if (!mapping) {
-        msgEl.textContent = "Could not generate a valid assignment, try different participants.";
+        msgEl.textContent = "Could not generate valid pairs. Try different participants.";
         msgEl.classList.add("error");
         return;
       }
@@ -634,12 +539,11 @@ Charlie &lt;charlie@example.com&gt;"></textarea>
         const createBtn = document.getElementById("createEventBtn");
         createBtn.disabled = true;
         createBtn.textContent = "Creating...";
+        
         await setDoc(doc(db, "secret_santa_events", eventId), eventDoc);
+        
         createBtn.disabled = false;
-        createBtn.textContent = "Create Secret Santa";
-
-        msgEl.textContent = `Event created! Event ID: ${eventId}`;
-        msgEl.classList.add("success");
+        createBtn.textContent = "🎁 Create Event";
 
         const url = new URL(window.location.href);
         url.searchParams.set("event", eventId);
@@ -651,12 +555,16 @@ Charlie &lt;charlie@example.com&gt;"></textarea>
 
         document.getElementById("eventIdInput").value = eventId;
         document.getElementById("adminEventIdInput").value = eventId;
+        
+        // Scroll to share card
+        document.getElementById("share-card").scrollIntoView({behavior: 'smooth'});
+        
       } catch (err) {
         console.error(err);
-        msgEl.textContent = "Error creating event: " + err.message;
+        msgEl.textContent = "Error: " + err.message;
         msgEl.classList.add("error");
         document.getElementById("createEventBtn").disabled = false;
-        document.getElementById("createEventBtn").textContent = "Create Secret Santa";
+        document.getElementById("createEventBtn").textContent = "Create Event";
       }
     }
 
@@ -669,7 +577,7 @@ Charlie &lt;charlie@example.com&gt;"></textarea>
       resEl.className = "small";
 
       if (!eventId || !participantKey) {
-        resEl.textContent = "Please provide event ID and your name/email.";
+        resEl.textContent = "Please provide Event ID and your name/email.";
         resEl.classList.add("error");
         return;
       }
@@ -678,7 +586,7 @@ Charlie &lt;charlie@example.com&gt;"></textarea>
         const docRef = doc(db, "secret_santa_events", eventId);
         const snap = await getDoc(docRef);
         if (!snap.exists()) {
-          resEl.textContent = "No event found with that ID.";
+          resEl.textContent = "Event not found.";
           resEl.classList.add("error");
           return;
         }
@@ -687,7 +595,7 @@ Charlie &lt;charlie@example.com&gt;"></textarea>
         const participant = participants[participantKey];
 
         if (!participant) {
-          resEl.textContent = "No participant found with that name/email. Check with the organiser.";
+          resEl.textContent = "Name not found in this event. Check spelling!";
           resEl.classList.add("error");
           return;
         }
@@ -696,12 +604,14 @@ Charlie &lt;charlie@example.com&gt;"></textarea>
         const recipient = participants[recipientKey];
         const recipientLabel = recipient ? recipient.label : recipientKey;
 
+        // Visual distinction for result
         resEl.innerHTML = `
-          <strong>Your recipient:</strong><br/>
-          ${recipientLabel}
+          <div style="background:#e8f5e9; padding:1rem; border-radius:8px; border:1px solid #c8e6c9; margin-top:0.5rem;">
+            Your recipient is:<br/>
+            <strong style="font-size:1.3rem; color:#1b5e20;">${recipientLabel}</strong>
+          </div>
         `;
-        resEl.classList.add("success");
-
+        
         const newViewCount = (participant.viewCount || 0) + 1;
         const firstViewedAt = participant.firstViewedAt || new Date().toISOString();
 
@@ -712,7 +622,7 @@ Charlie &lt;charlie@example.com&gt;"></textarea>
         });
       } catch (err) {
         console.error(err);
-        resEl.textContent = "Error loading recipient: " + err.message;
+        resEl.textContent = "Error: " + err.message;
         resEl.classList.add("error");
       }
     }
@@ -730,7 +640,7 @@ Charlie &lt;charlie@example.com&gt;"></textarea>
       tbody.innerHTML = "";
 
       if (!eventId || !adminEmail) {
-        msgEl.textContent = "Please provide event ID and organiser email.";
+        msgEl.textContent = "Enter Event ID and Organiser Email.";
         msgEl.classList.add("error");
         return;
       }
@@ -739,13 +649,13 @@ Charlie &lt;charlie@example.com&gt;"></textarea>
         const docRef = doc(db, "secret_santa_events", eventId);
         const snap = await getDoc(docRef);
         if (!snap.exists()) {
-          msgEl.textContent = "No event found with that ID.";
+          msgEl.textContent = "Event not found.";
           msgEl.classList.add("error");
           return;
         }
         const data = snap.data();
         if (data.organiserEmail !== adminEmail) {
-          msgEl.textContent = "Organiser email does not match. Access denied.";
+          msgEl.textContent = "Invalid email for this event.";
           msgEl.classList.add("error");
           return;
         }
@@ -757,30 +667,31 @@ Charlie &lt;charlie@example.com&gt;"></textarea>
           const p = participants[key];
           const recipient = participants[p.recipientKey];
           const tr = document.createElement("tr");
+          // Simple columns
           tr.innerHTML = `
-            <td>${p.label || key}</td>
+            <td><strong>${p.label || key}</strong></td>
             <td>${recipient ? recipient.label : p.recipientKey}</td>
-            <td>${p.viewed ? "✅" : "❌"}</td>
-            <td>${p.firstViewedAt ? new Date(p.firstViewedAt).toLocaleString() : "-"}</td>
-            <td>${p.viewCount || 0}</td>
+            <td>${p.viewed ? "<span style='color:green'>Yes</span>" : "<span style='color:#ccc'>No</span>"}</td>
           `;
           tbody.appendChild(tr);
         });
 
         tableWrapper.classList.remove("hidden");
-        msgEl.textContent = `Loaded ${keys.length} participants.`;
+        msgEl.textContent = "Stats loaded successfully.";
         msgEl.classList.add("success");
       } catch (err) {
         console.error(err);
-        msgEl.textContent = "Error loading admin view: " + err.message;
+        msgEl.textContent = "Error: " + err.message;
         msgEl.classList.add("error");
       }
     }
 
+    // Attach listeners
     document.getElementById("createEventBtn").addEventListener("click", createEvent);
     document.getElementById("viewRecipientBtn").addEventListener("click", viewRecipient);
     document.getElementById("loadAdminBtn").addEventListener("click", loadAdminView);
 
+    // Initial check for URL params
     const params = new URLSearchParams(window.location.search);
     const eventFromUrl = params.get("event");
     if (eventFromUrl) {
