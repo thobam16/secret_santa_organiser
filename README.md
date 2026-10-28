@@ -62,7 +62,7 @@ With the dev server running, `npm.cmd run test:auth-races` checks delayed accoun
 
 `npm.cmd run test:preferences` checks optional gift preferences, editing after the draw, recipient reveal/hide, archived events, and desktop/mobile layout with isolated mocked services. It does not change emulator data. The Firestore rules suite separately checks preference validation, updates, and private access through the real client API.
 
-`npm.cmd run test:snow` checks rendered snow pixels, the rare Arm-logo particle using simulated time, the snow toggle, and reduced-motion behaviour in a fresh anonymous browser context. It does not change account or event data.
+`npm.cmd run test:snow` checks visible snow, the rare Arm-logo particle, occasional sleigh flights, viewport sizing, and the animation toggle and reduced-motion behaviour using simulated time in a fresh anonymous browser context. It does not change account or event data. Turning snow off stops the sleigh too; all motion pauses while the tab is hidden.
 
 The dependency override for Firestore's Node-only `@grpc/grpc-js` pins the patched compatible version `1.14.6`; it avoids the vulnerable `1.9.x` transitive range. The browser build does not use gRPC. Recheck this override when upgrading Firebase.
 

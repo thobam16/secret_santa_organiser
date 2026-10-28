@@ -1,0 +1,105 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="220" viewBox="0 0 640 220" fill="none">
+  <defs>
+    <linearGradient id="red" x1="88" y1="98" x2="170" y2="174" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ee4d42"/><stop offset="1" stop-color="#a91f32"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="100" y1="130" x2="130" y2="202" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ffe29a"/><stop offset="1" stop-color="#c88a32"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Reins travel behind the team and join the two red breast collars. -->
+  <g stroke-linecap="round" stroke-linejoin="round">
+    <path d="M226 101C283 112 344 100 420 99S537 92 576 80" stroke="#5c3729" stroke-width="3"/>
+    <path d="M226 106C283 135 348 127 412 111S524 116 567 96" stroke="#d2a65c" stroke-width="3"/>
+
+    <!-- Trailing reindeer, with separated legs to keep the silhouette readable. -->
+    <g>
+      <path d="M349 125l-17 22-28 5 3 7 35-3 23-26M391 126l22 24 27-4-1-7-20-1-11-21" fill="#95613e" stroke="#76492e" stroke-width="3"/>
+      <path d="M305 152l-6 2 1 8 10-2-1-7M435 139l9-1 2 8-10 2" fill="#49372c"/>
+      <path d="M338 110c-13-8-20-6-26-1 8 3 12 9 23 10" fill="#b77d4a"/>
+      <path d="M340 105c16-12 39-12 57-2l13-20 12 5-7 29c-5 20-21 24-41 23-25-1-41-12-34-35Z" fill="#bd824c" stroke="#885434" stroke-width="3"/>
+      <path d="M350 129l-3 27-25 15 4 7 32-16 10-28M392 132l24 28 31-12-3-7-23 7-14-28" fill="#c99156" stroke="#885434" stroke-width="3"/>
+      <path d="m323 170-7 4 4 8 10-5-4-7M442 141l8-4 4 8-10 5" fill="#49372c"/>
+      <path d="M400 111c5-6 8-16 11-25l11 4-8 27-12 9-9-4" fill="#f1d6a7"/>
+      <path d="M412 83c-3-12 2-19 12-19 8 1 12 7 17 11l19 6c6 2 7 9 1 13-11 6-22 4-34-2l-9 11" fill="#ca945c" stroke="#885434" stroke-width="3"/>
+      <path d="M448 80l12 2c6 2 6 7 1 10-5 2-11 2-16-1" fill="#f7dfb6"/>
+      <path d="M415 72c-13-5-17-14-15-19 10-1 18 6 20 17" fill="#bd824c" stroke="#885434" stroke-width="3"/>
+      <path d="m406 59 8 9" stroke="#e7be8d" stroke-width="4"/>
+      <path d="M426 66c-2-13-6-24-11-32m5 13-14-6-5-9m15 4 1-13m4 28 9-13 1-11M434 68c4-12 8-25 7-38m-1 14 12-8 4-10m-14 7-7-8" stroke="#704b35" stroke-width="4.5"/>
+      <path d="M431 79h.1" stroke="#382a23" stroke-width="5"/>
+      <ellipse cx="460" cy="85" rx="4.5" ry="3.6" fill="#463027"/>
+      <path d="M432 91c4 2 7 2 10 1" stroke="#98613e" stroke-width="2"/>
+      <path d="m407 94 14 8-4 8-14-8" fill="#b92738" stroke="#8e2632" stroke-width="2"/>
+      <circle cx="411" cy="107" r="5" fill="#f6cd73" stroke="#b67c32" stroke-width="1.5"/>
+      <path d="m409 109 4-1" stroke="#855e33" stroke-width="1.5"/>
+    </g>
+
+    <!-- Leading reindeer is slightly higher, giving the whole team lift. -->
+    <g>
+      <path d="m500 111-18 27-27 4 2 7 33-3 25-29M545 114l18 25 29-5-1-7-20 1-11-22" fill="#95613e" stroke="#76492e" stroke-width="3"/>
+      <path d="m456 141-7 2 1 9 11-2-1-8M588 127l9-1 1 8-10 2" fill="#49372c"/>
+      <path d="M491 97c-11-9-19-9-26-4 6 4 12 12 23 12" fill="#c58b51"/>
+      <path d="M490 92c16-12 40-11 57-1l13-21 13 4-7 29c-5 22-21 26-42 23-24-3-39-16-34-34Z" fill="#cb9357" stroke="#885434" stroke-width="3"/>
+      <path d="m504 116-5 29-27 17 4 7 33-17 13-32M543 119l24 30 31-13-3-7-23 7-15-29" fill="#d6a268" stroke="#885434" stroke-width="3"/>
+      <path d="m473 162-7 5 4 8 10-6-4-7M592 130l9-4 4 8-11 5" fill="#49372c"/>
+      <path d="M551 99c5-8 8-19 11-29l11 5-7 27-12 12-10-5" fill="#f5ddb4"/>
+      <path d="M562 69c-2-12 3-20 13-19 9 1 12 8 17 12l19 7c6 2 7 9 1 13-12 6-23 2-34-4l-11 10" fill="#d6a268" stroke="#885434" stroke-width="3"/>
+      <path d="m600 67 12 3c6 2 6 7 1 10-6 2-12 1-17-2" fill="#f7dfb6"/>
+      <path d="M566 58c-14-5-18-13-16-19 10-1 17 7 20 16" fill="#cb9357" stroke="#885434" stroke-width="3"/>
+      <path d="m555 45 9 9" stroke="#f0c99b" stroke-width="4"/>
+      <path d="M575 52c-2-13-6-24-12-32m6 13-13-6-4-8m12 3 1-12m5 29 9-12 1-12M583 54c5-12 9-25 9-37m-1 14 12-8 3-10m-15 6-7-9" stroke="#704b35" stroke-width="4.5"/>
+      <path d="M581 65h.1" stroke="#382a23" stroke-width="5"/>
+      <ellipse cx="612" cy="73" rx="5" ry="4" fill="#be2938"/>
+      <ellipse cx="613" cy="72" rx="1.6" ry="1.1" fill="#ffb9aa"/>
+      <path d="M584 77c4 3 7 3 10 2" stroke="#98613e" stroke-width="2"/>
+      <path d="m556 80 15 8-4 8-15-8" fill="#bd2c3b" stroke="#8e2632" stroke-width="2"/>
+      <circle cx="560" cy="94" r="5.5" fill="#f6cd73" stroke="#b67c32" stroke-width="1.5"/>
+      <path d="m558 96 4-1" stroke="#855e33" stroke-width="1.5"/>
+    </g>
+
+    <!-- Presents are tucked into a soft green sack behind Santa. -->
+    <path d="M61 126c-9-18-2-34 15-43l2-13 28 2 3 13c22 6 34 20 27 43" fill="#397856" stroke="#26553f" stroke-width="3"/>
+    <path d="m78 77 29 2" stroke="#e1b660" stroke-width="5"/>
+    <g transform="rotate(-12 89 104)">
+      <rect x="57" y="83" width="48" height="42" rx="3" fill="#d83743" stroke="#9b2736" stroke-width="2"/>
+      <path d="M77 84v40M58 99h46" stroke="#f7d78c" stroke-width="7"/>
+      <path d="M79 84c-17-2-19-14-10-13 6 1 10 13 10 13Zm0 0c16-4 19-16 11-15-6 0-11 15-11 15Z" stroke="#f7d78c" stroke-width="4"/>
+    </g>
+    <g transform="rotate(8 126 100)">
+      <rect x="105" y="66" width="44" height="65" rx="3" fill="#2f7650" stroke="#22533d" stroke-width="2"/>
+      <path d="M126 67v63M106 85h42" stroke="#f2c66f" stroke-width="7"/>
+      <path d="M126 66c-16-2-20-14-11-14 7 0 11 14 11 14Zm0 0c16-3 20-15 12-15-7 0-12 15-12 15Z" stroke="#f2c66f" stroke-width="4"/>
+    </g>
+
+    <!-- Santa in profile: red cap, cream trim, a rounded nose and white beard. -->
+    <path d="M150 116c-3-18 7-39 24-40 18-1 29 15 34 37l-3 23-52-2Z" fill="#d62f3b" stroke="#a32632" stroke-width="3"/>
+    <path d="M175 83c-4 14-4 29-1 44" stroke="#fff2d7" stroke-width="9"/>
+    <path d="m150 119 56 2" stroke="#49372c" stroke-width="9"/>
+    <rect x="169" y="115" width="14" height="12" rx="2" stroke="#f4ce79" stroke-width="3"/>
+    <path d="M190 90c8 13 15 18 32 11" stroke="#a32632" stroke-width="20"/>
+    <path d="M190 88c9 13 16 15 30 9" stroke="#df3941" stroke-width="15"/>
+    <path d="m214 96 4 12" stroke="#fff2d7" stroke-width="7"/>
+    <path d="M219 96c9-6 16-3 16 3 0 5-8 9-14 8" fill="#644032"/>
+    <path d="M164 57c1-14 9-22 22-21 15 2 22 15 18 32-3 16-18 22-30 13-7-5-11-14-10-24Z" fill="#efb58c"/>
+    <path d="M171 62c6 0 7 8 13 8 7 0 14-3 20-10 7 16 5 28-4 35-7 5-20 6-29-3-11-10-13-24-11-32 3-4 8-3 11 2Z" fill="#fff7e5"/>
+    <path d="M177 88c6 5 14 5 20 0" stroke="#e5d5bb" stroke-width="2"/>
+    <path d="M191 55h.1" stroke="#49372c" stroke-width="4"/>
+    <ellipse cx="201" cy="60" rx="7" ry="5.5" fill="#f2b58b"/>
+    <path d="M188 68c-5-6-9-5-13-3 3 5 8 8 13 3Zm0 0c5-5 10-5 13-1-5 5-9 6-13 1Z" fill="#fffaf0"/>
+    <path d="M165 47c-4-13-13-18-28-18 12-19 29-24 42-16 11 6 15 18 16 28" fill="#de3540" stroke="#a32632" stroke-width="2.5"/>
+    <path d="M170 20c10 3 15 9 18 17" stroke="#ee655f" stroke-width="4"/>
+    <path d="M165 48c8-6 22-7 31-4" stroke="#fff7e5" stroke-width="12"/>
+    <circle cx="136" cy="30" r="8" fill="#fff7e5"/>
+
+    <!-- Sweeping red body and curled gold runner form one clear sleigh silhouette. -->
+    <path d="M40 111c18 15 41 17 68 17h88c29 0 43-14 49-37 7-3 16-1 20 6-4 34-20 64-57 69H87c-23 0-39-17-47-55Z" fill="url(#red)" stroke="#932438" stroke-width="3"/>
+    <path d="M42 112c18 15 40 19 67 19h87c31 0 46-16 52-39" stroke="#ffd98b" stroke-width="7"/>
+    <path d="M252 91c7-6 17-2 15 7-1 6-8 10-14 6" stroke="#ffd98b" stroke-width="5"/>
+    <path d="M82 142c8 5 14 6 26 6h86c18 0 30-6 37-16" stroke="#ef7860" stroke-width="3"/>
+    <path d="m97 167-6 19m108-20 11 20" stroke="#a76d2d" stroke-width="8"/>
+    <path d="M47 177c8 14 28 18 49 18h112c25 0 45-6 58-22 8-10 10-19 4-23-5-4-12 0-11 6" stroke="url(#gold)" stroke-width="7"/>
+    <path d="M88 187h122" stroke="#ffe6a8" stroke-width="2.5"/>
+    <path d="m147 142 3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1Z" fill="#f7d58a"/>
+  </g>
+</svg>

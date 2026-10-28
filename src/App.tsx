@@ -14,6 +14,7 @@ import { SiteContext } from "./context";
 import { friendlyError, useRoute, Loading } from "./lib/ui";
 import type { Member, SantaEvent } from "./types";
 import Snow from "./components/Snow";
+import FestiveDecor from "./components/FestiveDecor";
 import Home from "./pages/Home";
 import EventPage from "./pages/EventPage";
 const AuthPage = lazy(() => import("./pages/AuthPage"));
@@ -217,6 +218,7 @@ export default function App() {
 
   return (
     <SiteContext.Provider value={context}>
+      <FestiveDecor />
       <Snow enabled={snow} />
       <div className="app-shell">
         <a
