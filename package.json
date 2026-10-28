@@ -11,6 +11,7 @@
     "test:rules": "firebase emulators:exec --only firestore --project demo-secret-santa \"vitest run --config vitest.rules.config.ts\"",
     "test:e2e": "node scripts/browser-check.mjs",
     "test:auth-races": "node scripts/auth-race-check.mjs",
+    "test:preferences": "node scripts/preferences-check.mjs",
     "test:snow": "node scripts/snow-check.mjs",
     "emulators": "firebase emulators:start --only auth,firestore --project demo-secret-santa",
     "seed:emulators": "node scripts/seed-emulators.mjs",

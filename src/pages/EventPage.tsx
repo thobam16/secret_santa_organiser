@@ -9,10 +9,15 @@ import {
   Users,
 } from "lucide-react";
 import { useSite } from "../context";
-import { getAssignment, joinEvent, leaveEvent } from "../lib/api";
+import {
+  getRecipient,
+  joinEvent,
+  leaveEvent,
+  updatePreferences,
+} from "../lib/api";
 import { Feedback, Loading, useAction, useNow } from "../lib/ui";
 import { Countdown, GiftGuide, StatusPill } from "../components/EventBits";
-import type { Assignment } from "../types";
+import type { Recipient } from "../types";
 
 export default function EventPage({ id }: { id: string }) {
   const {
@@ -29,13 +34,17 @@ export default function EventPage({ id }: { id: string }) {
   const event = events.find((item) => item.id === id);
   const member = memberships[id];
   const [name, setName] = useState(member?.name || user?.displayName || "");
+  const [preferences, setPreferences] = useState(member?.preferences || "");
   const [leaving, setLeaving] = useState(false);
-  const [assignment, setAssignment] = useState<Assignment | null>(null);
+  const [assignment, setAssignment] = useState<Recipient | null>(null);
   const action = useAction();
   const now = useNow();
   useEffect(() => {
     if (member) setName(member.name);
   }, [member?.name]);
+  useEffect(() => {
+    setPreferences(member?.preferences || "");
+  }, [member?.preferences]);
   useEffect(() => {
     setAssignment(null);
   }, [event?.activeRunId, user?.uid]);
@@ -62,10 +71,11 @@ export default function EventPage({ id }: { id: string }) {
     form.preventDefault();
     void action.run(
       async () => {
-        await joinEvent(id, name);
+        if (open) await joinEvent(id, name, preferences);
+        else await updatePreferences(id, preferences);
         await reloadMemberships();
       },
-      member ? "Your name has been updated." : "You’re registered.",
+      member ? "Saved." : "You’re registered.",
     );
   };
   return (
@@ -124,6 +134,55 @@ export default function EventPage({ id }: { id: string }) {
           <GiftGuide event={event} />
         </div>
         <aside className="stack">
+          {member && drawn && (
+            <section className="recipient-card">
+              <h2>Your recipient</h2>
+              {assignment ? (
+                <>
+                  <p className="recipient-name" data-testid="recipient-name">
+                    {assignment.recipientName}
+                  </p>
+                  {assignment.preferences && (
+                    <div className="gift-preferences recipient-preferences">
+                      <h3>Gift preferences</h3>
+                      <p
+                        className="preserve-lines"
+                        data-testid="recipient-preferences"
+                      >
+                        {assignment.preferences}
+                      </p>
+                    </div>
+                  )}
+                  <p>Keep your recipient secret.</p>
+                  <button
+                    className="button secondary"
+                    onClick={() => setAssignment(null)}
+                  >
+                    <EyeOff size={17} />
+                    Hide my recipient
+                  </button>
+                </>
+              ) : (
+                <button
+                  className="button primary"
+                  disabled={action.busy}
+                  onClick={() =>
+                    void action.run(async () => {
+                      const result = await getRecipient(id, member.uid);
+                      if (!result)
+                        throw new Error(
+                          "Your recipient isn’t ready yet. Please try again shortly.",
+                        );
+                      setAssignment(result);
+                    })
+                  }
+                >
+                  <Eye size={17} />
+                  Reveal my recipient
+                </button>
+              )}
+            </section>
+          )}
           <section className={`panel join-panel ${member ? "joined" : ""}`}>
             <h2>
               {member
@@ -152,47 +211,71 @@ export default function EventPage({ id }: { id: string }) {
                   Verify my email
                 </a>
               </div>
-            ) : open ? (
+            ) : open || (member && event.status !== "archived") ? (
               <form onSubmit={submit}>
+                {open && (
+                  <>
+                    <label className="field">
+                      Your name
+                      <input
+                        autoComplete="name"
+                        maxLength={100}
+                        required
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        disabled={action.busy}
+                        placeholder="Your full name"
+                      />
+                    </label>
+                    <p className="field-help">
+                      Use a name your gift-giver will recognise.
+                    </p>
+                  </>
+                )}
                 <label className="field">
-                  Your name
-                  <input
-                    autoComplete="name"
-                    maxLength={100}
-                    required
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
+                  Gift preferences (optional)
+                  <textarea
+                    rows={3}
+                    maxLength={500}
+                    value={preferences}
+                    onChange={(e) => setPreferences(e.target.value)}
                     disabled={action.busy}
-                    placeholder="Your full name"
+                    placeholder="Interests, favourite treats, or things to avoid."
+                    aria-describedby="preferences-help"
                   />
                 </label>
-                <p className="field-help">
-                  Use a name your gift-giver will recognise.
+                <p className="field-help" id="preferences-help">
+                  Visible to your gift giver and the organiser.
                 </p>
                 <button
                   className="button primary full-width"
-                  disabled={action.busy || !name.trim()}
+                  disabled={action.busy || (open && !name.trim())}
                 >
                   {action.busy
                     ? "Saving…"
                     : member
-                      ? "Save my name"
+                      ? open
+                        ? "Save changes"
+                        : "Save preferences"
                       : "Join event"}
                   {!member && <ArrowRight size={17} />}
                 </button>
               </form>
-            ) : (
-              member &&
-              !drawn && (
-                <div className="notice info">
-                  <LockKeyhole size={17} />
-                  <span>
-                    {event.status === "drawing"
-                      ? "The draw is in progress. Your recipient will appear here when it’s ready."
-                      : "Waiting for the organiser to make the draw."}
-                  </span>
-                </div>
-              )
+            ) : member?.preferences ? (
+              <div className="gift-preferences">
+                <h3>Gift preferences</h3>
+                <p className="preserve-lines">{member.preferences}</p>
+              </div>
+            ) : null}
+            {member && !open && !drawn && event.status !== "archived" && (
+              <div className="notice info">
+                <LockKeyhole size={17} />
+                <span>
+                  {event.status === "drawing"
+                    ? "The draw is in progress. Your recipient will appear here when it’s ready."
+                    : "Waiting for the organiser to make the draw."}
+                </span>
+              </div>
             )}
             {member && open && (
               <div className="leave-event">
@@ -236,46 +319,6 @@ export default function EventPage({ id }: { id: string }) {
               </div>
             )}
           </section>
-          {member && drawn && (
-            <section className="recipient-card">
-              <h2>Your recipient</h2>
-              {assignment ? (
-                <>
-                  <p className="recipient-name" data-testid="recipient-name">
-                    {assignment.recipientName}
-                  </p>
-                  <p>Keep your recipient secret.</p>
-                  <button
-                    className="button secondary"
-                    onClick={() => setAssignment(null)}
-                  >
-                    <EyeOff size={17} />
-                    Hide my recipient
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button
-                    className="button primary"
-                    disabled={action.busy}
-                    onClick={() =>
-                      void action.run(async () => {
-                        const result = await getAssignment(id, member.uid);
-                        if (!result)
-                          throw new Error(
-                            "Your recipient isn’t ready yet. Please try again shortly.",
-                          );
-                        setAssignment(result);
-                      })
-                    }
-                  >
-                    <Eye size={17} />
-                    Reveal my recipient
-                  </button>
-                </>
-              )}
-            </section>
-          )}
         </aside>
       </div>
     </div>

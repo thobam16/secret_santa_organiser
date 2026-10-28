@@ -7,6 +7,7 @@ A festive Secret Santa organiser for `santa.bamber.dev`. The static React/TypeSc
 - Register with any email address and password, verify the email, and join one or more events using a display name.
 - Follow separate signup and gift-exchange countdowns, with exact dates shown in UK time.
 - Change their name or leave before registration closes. Once the organiser draws names, privately reveal their own recipient and revisit it later.
+- Optionally add gift preferences or interests for each event (up to 500 characters). These can be updated until the event is archived and are visible only to that participant, their assigned gift giver after the draw, and the organiser.
 - Read the supplied gift guide, including the approximate £10 budget, wrapping and labelling advice, and gift ideas. The signup date is generated from each event's settings.
 
 The sole organiser creates every location manually. The organiser dashboard manages dates, participants, the draw, and archiving. Each recipient starts concealed behind a Reveal/Hide control, including after a draw or page reload. The organiser can technically access all pairings: this is a trusted-organiser design, not cryptographic secrecy from the person running the draw.
@@ -58,6 +59,8 @@ npm.cmd run build
 Run `npm.cmd run test:e2e` with the dev server and local emulators running, and both emulator host variables set as shown above. It uses installed Google Chrome in headless mode and resets/reseeds only the explicitly named local `demo-secret-santa` Firestore database before each run. Do not use that demo database for work you want to keep. Browser checks cover registration, verification, multiple memberships, joining/editing/leaving, event creation, drawing, reveal privacy, refreshing routes, reduced motion, and desktop/mobile layout; screenshots are saved in the ignored `artifacts/` directory.
 
 With the dev server running, `npm.cmd run test:auth-races` checks delayed account changes, stale role/membership responses, and verification finishing after sign-out. It uses isolated mocked service responses in a fresh Chrome context and does not change emulator data.
+
+`npm.cmd run test:preferences` checks optional gift preferences, editing after the draw, recipient reveal/hide, archived events, and desktop/mobile layout with isolated mocked services. It does not change emulator data. The Firestore rules suite separately checks preference validation, updates, and private access through the real client API.
 
 `npm.cmd run test:snow` checks rendered snow pixels, the rare Arm-logo particle using simulated time, the snow toggle, and reduced-motion behaviour in a fresh anonymous browser context. It does not change account or event data.
 
@@ -130,4 +133,4 @@ The current recovery plan is stored in one document, with an 850 KB preflight bo
 
 Firestore Spark includes a daily usage allowance; crossing its limits can interrupt service until the quota resets. Keep reads modest and review usage in the Firebase console. Cloud Functions, automated reminders, and paid backup features are outside this version. See [Firebase pricing](https://firebase.google.com/pricing) and [Firestore limits](https://firebase.google.com/docs/firestore/quotas).
 
-Participant names and membership data are stored in Firestore; login email/password handling is provided by Firebase Authentication. The organiser sees the roster, while participants see their own membership and event counts. Archived data remains stored until deliberately removed through trusted project administration. The browser stores sign-in state and the snow preference; recipient reveal state is not retained across navigation or reloads.
+Participant names, optional gift preferences, and membership data are stored in Firestore; login email/password handling is provided by Firebase Authentication. The organiser sees the roster, while participants can read their own membership and their assigned recipient's membership after the draw is published. The recipient reveal fetches the latest saved preferences; preferences are not copied into the immutable draw. Archived data remains stored until deliberately removed through trusted project administration. The browser stores sign-in state and the snow preference; recipient reveal state is not retained across navigation or reloads.

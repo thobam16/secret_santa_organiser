@@ -59,7 +59,12 @@ await context.addInitScript(() => {
     state.roleWaiters.delete(uid);
   };
   state.membershipFor = (uid) => ({
-    gathering: { uid, name: `Member ${uid}`, joinedAt: 1 },
+    gathering: {
+      uid,
+      name: `Member ${uid}`,
+      preferences: `Gift ideas for ${uid}`,
+      joinedAt: 1,
+    },
   });
   state.resolveMembership = (uid) => {
     state.membershipsHeld.delete(uid);
@@ -134,8 +139,12 @@ await page.route(/\/src\/lib\/api\.ts(?:\?|$)/, (route) =>
     export async function getAssignment(eventId, uid) {
       return { giverUid: uid, recipientUid: 'recipient-' + uid, recipientName: 'Recipient for ' + uid };
     }
+    export async function getRecipient(eventId, uid) {
+      return { ...await getAssignment(eventId, uid), preferences: 'Preferences for ' + uid };
+    }
     export async function getMembers() { return []; }
     export async function joinEvent() { throw new Error('Unexpected mutation'); }
+    export async function updatePreferences() { throw new Error('Unexpected mutation'); }
     export async function leaveEvent() { throw new Error('Unexpected mutation'); }
     export async function saveEvent() { throw new Error('Unexpected mutation'); }
     export async function setRegistration() { throw new Error('Unexpected mutation'); }

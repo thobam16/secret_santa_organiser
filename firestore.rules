@@ -69,9 +69,19 @@ service cloud.firestore {
       );
     }
     function validMember(d, uid) {
-      return d.keys().hasAll(['uid', 'name', 'joinedAt']) && d.keys().hasOnly(['uid', 'name', 'joinedAt'])
+      return d.keys().hasAll(['uid', 'name', 'joinedAt']) && d.keys().hasOnly(['uid', 'name', 'joinedAt', 'preferences'])
         && d.uid == uid && d.name is string && d.name.size() > 0 && d.name.size() <= 100
-        && d.joinedAt is int && d.joinedAt > 0;
+        && d.joinedAt is int && d.joinedAt > 0
+        && (!('preferences' in d) || (d.preferences is string && d.preferences.size() <= 500));
+    }
+    function isAssignedGiver(eventId, recipientUid) {
+      let event = get(eventPath(eventId)).data;
+      return event.status in ['drawn', 'archived'] && event.activeRunId is string
+        && get(/databases/$(database)/documents/events/$(eventId)/runs/$(event.activeRunId)/assignments/$(request.auth.uid)).data.recipientUid == recipientUid;
+    }
+    function preferencesEditable(eventId) {
+      return get(eventPath(eventId)).data.status in ['open', 'locked', 'drawing', 'drawn']
+        && getAfter(eventPath(eventId)).data.status in ['open', 'locked', 'drawing', 'drawn'];
     }
 
     // Provision the sole organiser from the console or a trusted setup script.
@@ -90,16 +100,19 @@ service cloud.firestore {
       allow delete: if false;
 
       match /members/{uid} {
-        allow get: if signedIn() && (request.auth.uid == uid || isAdmin());
+        allow get: if signedIn() && (request.auth.uid == uid || isAdmin() || isAssignedGiver(eventId, uid));
         allow list: if isAdmin();
         allow create: if canJoin(eventId) && request.auth.uid == uid
           && validMember(request.resource.data, uid)
           && getAfter(eventPath(eventId)).data.memberCount == get(eventPath(eventId)).data.memberCount + 1
           && getAfter(eventPath(eventId)).data.status == 'open';
-        allow update: if canJoin(eventId) && request.auth.uid == uid
+        allow update: if verified() && request.auth.uid == uid
           && validMember(request.resource.data, uid)
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name'])
-          && getAfter(eventPath(eventId)).data.status == 'open';
+          && ((canJoin(eventId)
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'preferences'])
+              && getAfter(eventPath(eventId)).data.status == 'open')
+            || (preferencesEditable(eventId)
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['preferences'])));
         allow delete: if ((canJoin(eventId) && request.auth.uid == uid) || (isAdmin() && rosterOpen(eventId)))
           && getAfter(eventPath(eventId)).data.memberCount == get(eventPath(eventId)).data.memberCount - 1
           && getAfter(eventPath(eventId)).data.status == 'open';

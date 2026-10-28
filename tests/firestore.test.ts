@@ -16,6 +16,7 @@ import {
 } from "@firebase/rules-unit-testing";
 import {
   collection,
+  deleteField,
   deleteDoc,
   doc,
   getDoc,
@@ -25,7 +26,14 @@ import {
   writeBatch,
   type Firestore,
 } from "firebase/firestore";
-import { getAssignment, joinEvent, runDraw, saveEvent } from "../src/lib/api";
+import {
+  getAssignment,
+  getRecipient,
+  joinEvent,
+  runDraw,
+  saveEvent,
+  updatePreferences,
+} from "../src/lib/api";
 import { validateAssignments } from "../src/lib/draw";
 import type { Assignment, Member } from "../src/types";
 
@@ -77,6 +85,7 @@ describe.skipIf(!enabled)("Firestore access and lifecycle rules", () => {
   let environment: RulesTestEnvironment;
   let admin: Firestore;
   let alice: Firestore;
+  let bob: Firestore;
   let outsider: Firestore;
   let unverified: Firestore;
   let anonymous: Firestore;
@@ -106,6 +115,12 @@ describe.skipIf(!enabled)("Firestore access and lifecycle rules", () => {
     alice = environment
       .authenticatedContext("alice", {
         email: "alice@example.com",
+        email_verified: true,
+      })
+      .firestore() as unknown as Firestore;
+    bob = environment
+      .authenticatedContext("bob", {
+        email: "bob@example.com",
         email_verified: true,
       })
       .firestore() as unknown as Firestore;
@@ -157,12 +172,14 @@ describe.skipIf(!enabled)("Firestore access and lifecycle rules", () => {
     uid: string,
     eventId = "manchester",
     count = 4,
+    preferences?: unknown,
   ) {
     const batch = writeBatch(database);
     batch.set(doc(database, `events/${eventId}/members/${uid}`), {
       uid,
       name: "New person",
       joinedAt: NOW,
+      ...(preferences === undefined ? {} : { preferences }),
     });
     batch.update(doc(database, `events/${eventId}`), { memberCount: count });
     return batch.commit();
@@ -276,6 +293,248 @@ describe.skipIf(!enabled)("Firestore access and lifecycle rules", () => {
     );
     await assertFails(
       updateDoc(doc(alice, "events/manchester/members/bob"), { name: "Alice" }),
+    );
+  });
+
+  it("accepts optional preferences on new and legacy memberships and enforces their limits", async () => {
+    await assertSucceeds(
+      join(outsider, "dave", "manchester", 4, "x".repeat(500)),
+    );
+    await assertFails(join(outsider, "dave", "sheffield", 4, "x".repeat(501)));
+    await assertFails(join(outsider, "dave", "sheffield", 4, ["Books"]));
+    await assertSucceeds(join(outsider, "dave", "sheffield"));
+    const legacy = doc(alice, "events/manchester/members/alice");
+    expect((await getDoc(legacy)).data()).not.toHaveProperty("preferences");
+    await assertSucceeds(updateDoc(legacy, { preferences: "Books" }));
+    await assertSucceeds(updateDoc(legacy, { preferences: "x".repeat(500) }));
+    for (const preferences of [
+      "x".repeat(501),
+      42,
+      null,
+      ["Books"],
+      { books: true },
+    ]) {
+      await assertFails(updateDoc(legacy, { preferences }));
+    }
+    await assertSucceeds(updateDoc(legacy, { preferences: "" }));
+    await assertSucceeds(updateDoc(legacy, { preferences: deleteField() }));
+    await assertSucceeds(updateDoc(legacy, { name: "Alice B." }));
+  });
+
+  it.each(["open", "locked", "drawing", "drawn"])(
+    "allows preferences-only updates after the deadline in %s events while freezing identity",
+    async (status) => {
+      await updateDoc(doc(admin, "events/manchester"), {
+        signupDeadline: NOW - 60_000,
+      });
+      if (status === "locked")
+        await updateDoc(doc(admin, "events/manchester"), { status });
+      if (status === "drawing") await reserveDraw();
+      if (status === "drawn") await publishDraw();
+      const member = doc(alice, "events/manchester/members/alice");
+      await assertSucceeds(
+        updateDoc(member, { preferences: "Coffee and books" }),
+      );
+      for (const forbidden of [
+        { name: "Another person" },
+        { uid: "bob" },
+        { joinedAt: NOW + 1 },
+      ]) {
+        await assertFails(
+          updateDoc(member, { preferences: "New notes", ...forbidden }),
+        );
+      }
+      expect((await getDoc(member)).data()).toEqual({
+        uid: "alice",
+        name: "Alice",
+        joinedAt: NOW,
+        preferences: "Coffee and books",
+      });
+    },
+  );
+
+  it("only lets the verified member edit their own preferences", async () => {
+    await publishDraw();
+    const unverifiedAlice = environment
+      .authenticatedContext("alice", { email_verified: false })
+      .firestore() as unknown as Firestore;
+    for (const database of [anonymous, outsider, admin, unverifiedAlice]) {
+      await assertFails(
+        updateDoc(doc(database, "events/manchester/members/alice"), {
+          preferences: "Changed by someone else",
+        }),
+      );
+    }
+    await assertFails(
+      updateDoc(doc(alice, "events/manchester/members/bob"), {
+        preferences: "Gift choice",
+      }),
+    );
+    await assertFails(
+      setDoc(doc(outsider, "events/manchester/members/dave"), {
+        uid: "dave",
+        name: "Dave",
+        joinedAt: NOW,
+        preferences: "Not a participant",
+      }),
+    );
+    await assertSucceeds(
+      updateDoc(doc(alice, "events/manchester/members/alice"), {
+        preferences: "My own choice",
+      }),
+    );
+  });
+
+  it("keeps preferences private until publication, then allows only the assigned giver and organiser", async () => {
+    await updateDoc(doc(bob, "events/manchester/members/bob"), {
+      preferences: "Tea",
+    });
+    await assertFails(getDoc(doc(alice, "events/manchester/members/bob")));
+    await reserveDraw();
+    await setDoc(
+      doc(admin, "events/manchester/runs/run-one/assignments/alice"),
+      assignment,
+    );
+    await assertFails(getDoc(doc(alice, "events/manchester/members/bob")));
+    await updateDoc(doc(admin, "events/manchester"), { status: "drawn" });
+    const recipient = await assertSucceeds(
+      getDoc(doc(alice, "events/manchester/members/bob")),
+    );
+    expect(recipient.data()?.preferences).toBe("Tea");
+    await assertFails(getDoc(doc(alice, "events/manchester/members/cara")));
+    await assertFails(getDoc(doc(outsider, "events/manchester/members/bob")));
+    await assertFails(getDoc(doc(anonymous, "events/manchester/members/bob")));
+    await assertFails(getDocs(collection(alice, "events/manchester/members")));
+    await assertSucceeds(getDoc(doc(admin, "events/manchester/members/bob")));
+  });
+
+  it("ignores stale assignments and never uses a published assignment from another event for preferences", async () => {
+    await publishDraw();
+    await reserveDraw("sheffield");
+    await setDoc(
+      doc(admin, "events/sheffield/runs/run-one/assignments/alice"),
+      assignment,
+    );
+    await environment.withSecurityRulesDisabled(async (context) => {
+      const database = context.firestore();
+      await setDoc(
+        doc(database, "events/manchester/runs/old-run/assignments/alice"),
+        {
+          ...assignment,
+          recipientUid: "cara",
+          recipientName: "Cara",
+        },
+      );
+    });
+    await assertSucceeds(getDoc(doc(alice, "events/manchester/members/bob")));
+    await assertFails(getDoc(doc(alice, "events/manchester/members/cara")));
+    await assertFails(getDoc(doc(alice, "events/sheffield/members/bob")));
+    await updateDoc(doc(admin, "events/sheffield"), { status: "drawn" });
+    await assertSucceeds(getDoc(doc(alice, "events/sheffield/members/bob")));
+  });
+
+  it("keeps published preferences readable after archive but rejects all preference changes", async () => {
+    await publishDraw();
+    await updateDoc(doc(admin, "events/manchester"), { status: "archived" });
+    await assertSucceeds(getDoc(doc(alice, "events/manchester/members/bob")));
+    await assertFails(
+      updateDoc(doc(alice, "events/manchester/members/alice"), {
+        preferences: "Too late",
+      }),
+    );
+    await assertFails(
+      updateDoc(doc(admin, "events/manchester/members/alice"), {
+        preferences: "Too late",
+      }),
+    );
+    await updateDoc(doc(admin, "events/sheffield"), { status: "archived" });
+    await assertFails(getDoc(doc(alice, "events/sheffield/members/bob")));
+  });
+
+  it("rejects changing preferences in the same batch that archives the event", async () => {
+    await join(admin, "organiser");
+    const batch = writeBatch(admin);
+    batch.update(doc(admin, "events/manchester/members/organiser"), {
+      preferences: "Last edit",
+    });
+    batch.update(doc(admin, "events/manchester"), { status: "archived" });
+    await assertFails(batch.commit());
+  });
+
+  it("trims per-event preferences through the API without changing registration or identity", async () => {
+    apiSession.database = outsider;
+    apiSession.currentUser = { uid: "dave", emailVerified: true };
+    await joinEvent("manchester", "  Dave  ", "  Tea\nBooks  ");
+    await joinEvent("sheffield", "Dave");
+    const member = doc(outsider, "events/manchester/members/dave");
+    const original = (await getDoc(member)).data()!;
+    expect(original.preferences).toBe("Tea\nBooks");
+    expect(
+      (await getDoc(doc(outsider, "events/sheffield/members/dave"))).data()
+        ?.preferences,
+    ).toBe("");
+    await joinEvent("manchester", "Dave B.", "Chocolate");
+    await updateDoc(doc(admin, "events/manchester"), { status: "locked" });
+    await updatePreferences("manchester", "  New suggestions  ");
+    expect((await getDoc(member)).data()).toEqual({
+      ...original,
+      name: "Dave B.",
+      preferences: "New suggestions",
+    });
+    expect(
+      (await getDoc(doc(outsider, "events/manchester"))).data()?.memberCount,
+    ).toBe(4);
+    await expect(
+      updatePreferences("manchester", "x".repeat(501)),
+    ).rejects.toThrow("500");
+    await expect(
+      joinEvent("sheffield", "Dave", "x".repeat(501)),
+    ).rejects.toThrow("500");
+    await updatePreferences("manchester", "   ");
+    expect((await getDoc(member)).data()?.preferences).toBe("");
+  });
+
+  it("returns current recipient preferences rather than a draw-time snapshot", async () => {
+    apiSession.database = alice;
+    apiSession.currentUser = { uid: "alice", emailVerified: true };
+    expect(await getRecipient("manchester", "alice")).toBeNull();
+    await publishDraw();
+    expect(await getRecipient("manchester", "alice")).toEqual({
+      ...assignment,
+      preferences: "",
+    });
+    await assertFails(getRecipient("manchester", "bob"));
+    apiSession.database = bob;
+    apiSession.currentUser = { uid: "bob", emailVerified: true };
+    await updatePreferences("manchester", "  Decaf coffee  ");
+    apiSession.database = alice;
+    apiSession.currentUser = { uid: "alice", emailVerified: true };
+    expect(await getRecipient("manchester", "alice")).toEqual({
+      ...assignment,
+      preferences: "Decaf coffee",
+    });
+    expect(await getAssignment("manchester", "alice")).toEqual(assignment);
+    await updateDoc(doc(admin, "events/manchester"), { status: "archived" });
+    expect((await getRecipient("manchester", "alice"))?.preferences).toBe(
+      "Decaf coffee",
+    );
+  });
+
+  it("reports API preference errors for non-members, unverified accounts and archived events", async () => {
+    apiSession.database = outsider;
+    apiSession.currentUser = { uid: "dave", emailVerified: true };
+    await expect(updatePreferences("manchester", "Books")).rejects.toThrow(
+      "Join this event",
+    );
+    apiSession.database = alice;
+    apiSession.currentUser = { uid: "alice", emailVerified: false };
+    await expect(updatePreferences("manchester", "Books")).rejects.toThrow(
+      "Verify your email",
+    );
+    apiSession.currentUser = { uid: "alice", emailVerified: true };
+    await updateDoc(doc(admin, "events/manchester"), { status: "archived" });
+    await expect(updatePreferences("manchester", "Books")).rejects.toThrow(
+      "archived event",
     );
   });
 

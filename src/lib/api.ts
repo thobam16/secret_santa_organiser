@@ -12,7 +12,13 @@ import {
 import { auth, db } from "./firebase";
 import { makeAssignments, validateAssignments } from "./draw";
 import { validateEventInput } from "./dates";
-import type { Assignment, EventInput, Member, SantaEvent } from "../types";
+import type {
+  Assignment,
+  EventInput,
+  Member,
+  Recipient,
+  SantaEvent,
+} from "../types";
 
 const eventRef = (id: string) => doc(db, "events", id);
 const memberRef = (eventId: string, uid: string) =>
@@ -45,6 +51,13 @@ function cleanName(name: string) {
   const value = name.trim().replace(/\s+/g, " ");
   if (!value || value.length > 100)
     throw new Error("Please enter a name between 1 and 100 characters.");
+  return value;
+}
+
+function cleanPreferences(preferences: string) {
+  const value = preferences.trim();
+  if (value.length > 500)
+    throw new Error("Keep gift preferences to 500 characters or fewer.");
   return value;
 }
 
@@ -136,11 +149,16 @@ export async function saveEvent(
   return reference.id;
 }
 
-export async function joinEvent(eventId: string, name: string): Promise<void> {
+export async function joinEvent(
+  eventId: string,
+  name: string,
+  preferences = "",
+): Promise<void> {
   const user = requireUser();
   if (!user.emailVerified)
     throw new Error("Verify your email address before joining.");
   const clean = cleanName(name);
+  const cleanNotes = cleanPreferences(preferences);
   await runTransaction(db, async (transaction) => {
     const [eventSnapshot, memberSnapshot] = await Promise.all([
       transaction.get(eventRef(eventId)),
@@ -150,17 +168,43 @@ export async function joinEvent(eventId: string, name: string): Promise<void> {
     if (event.status !== "open" || event.signupDeadline <= Date.now())
       throw new Error("Registration for this event has closed.");
     if (memberSnapshot.exists()) {
-      transaction.update(memberRef(eventId, user.uid), { name: clean });
+      transaction.update(memberRef(eventId, user.uid), {
+        name: clean,
+        preferences: cleanNotes,
+      });
     } else {
       transaction.set(memberRef(eventId, user.uid), {
         uid: user.uid,
         name: clean,
         joinedAt: Date.now(),
+        preferences: cleanNotes,
       });
       transaction.update(eventRef(eventId), {
         memberCount: event.memberCount + 1,
       });
     }
+  });
+}
+
+export async function updatePreferences(
+  eventId: string,
+  preferences: string,
+): Promise<void> {
+  const user = requireUser();
+  if (!user.emailVerified)
+    throw new Error("Verify your email address before saving preferences.");
+  const clean = cleanPreferences(preferences);
+  await runTransaction(db, async (transaction) => {
+    const [eventSnapshot, memberSnapshot] = await Promise.all([
+      transaction.get(eventRef(eventId)),
+      transaction.get(memberRef(eventId, user.uid)),
+    ]);
+    const event = eventFrom(eventSnapshot);
+    if (event.status === "archived")
+      throw new Error("Preferences cannot change for an archived event.");
+    if (!memberSnapshot.exists())
+      throw new Error("Join this event before saving preferences.");
+    transaction.update(memberRef(eventId, user.uid), { preferences: clean });
   });
 }
 
@@ -347,6 +391,16 @@ export async function getAssignment(
     return null;
   const snapshot = await getDoc(assignmentRef(eventId, event.activeRunId, uid));
   return snapshot.exists() ? (snapshot.data() as Assignment) : null;
+}
+
+export async function getRecipient(
+  eventId: string,
+  uid: string,
+): Promise<Recipient | null> {
+  const assignment = await getAssignment(eventId, uid);
+  if (!assignment) return null;
+  const recipient = await getDoc(memberRef(eventId, assignment.recipientUid));
+  return { ...assignment, preferences: recipient.data()?.preferences ?? "" };
 }
 
 export async function archiveEvent(eventId: string): Promise<void> {

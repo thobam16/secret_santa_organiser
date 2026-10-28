@@ -96,10 +96,8 @@ try {
   await page.getByRole("button", { name: "Join event" }).click();
   await page.getByRole("heading", { name: "You’re registered" }).waitFor();
   await page.getByLabel("Your name").fill("Browser Test Guest Updated");
-  await page.getByRole("button", { name: "Save my name" }).click();
-  await page
-    .getByText("Your name has been updated.", { exact: true })
-    .waitFor();
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await page.getByText("Saved.", { exact: true }).waitFor();
   await go("/events/demo-sheffield");
   await page.getByLabel("Your name").fill("Browser Test Guest");
   await page.getByRole("button", { name: "Join event" }).click();

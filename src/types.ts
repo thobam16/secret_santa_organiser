@@ -23,12 +23,17 @@ export interface Member {
   uid: string;
   name: string;
   joinedAt: number;
+  preferences?: string;
 }
 
 export interface Assignment {
   giverUid: string;
   recipientUid: string;
   recipientName: string;
+}
+
+export interface Recipient extends Assignment {
+  preferences: string;
 }
 
 export const DEFAULT_GUIDELINES = [
