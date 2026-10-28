@@ -108,7 +108,7 @@ The workflow in `.github/workflows/deploy.yml` installs dependencies with `npm c
 
 GitHub's [custom-domain instructions](https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site/managing-a-custom-domain-for-your-github-pages-site) cover verification and DNS. A custom Actions workflow uses the Pages domain setting; a `CNAME` file is not required.
 
-For the custom domain, the asset base path is `/`. To use only `https://thobam16.github.io/secret_santa_organiser/`, set the repository Actions variable **`VITE_BASE_PATH`** to `/secret_santa_organiser/`. The optional `VITE_FIREBASE_*` Actions variables override the public Firebase defaults. Hash routes make event/admin links survive refreshes without server rewrites.
+Assets use relative paths (`./`) by default, so the same build works at both `https://thobam16.github.io/secret_santa_organiser/` and `santa.bamber.dev`. No Actions variable is needed. An explicit **`VITE_BASE_PATH`** in the build environment or Actions variables can still override this; remove an old `/` override when using the repository URL. The optional `VITE_FIREBASE_*` Actions variables override the public Firebase defaults. Hash routes make event/admin links survive refreshes without server rewrites.
 
 ## Running an event
 
