@@ -1,0 +1,46 @@
+{
+  "name": "secret-santa-organiser",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "vitest run",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-secret-santa \"vitest run --config vitest.rules.config.ts\"",
+    "test:e2e": "node scripts/browser-check.mjs",
+    "test:auth-races": "node scripts/auth-race-check.mjs",
+    "test:snow": "node scripts/snow-check.mjs",
+    "emulators": "firebase emulators:start --only auth,firestore --project demo-secret-santa",
+    "seed:emulators": "node scripts/seed-emulators.mjs",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "@fontsource/dm-sans": "5.3.0",
+    "@fontsource/fraunces": "5.3.0",
+    "@js-temporal/polyfill": "0.5.1",
+    "firebase": "13.1.0",
+    "lucide-react": "1.63.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "6.0.0",
+    "@types/node": "26.6.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "firebase-admin": "14.5.0",
+    "firebase-tools": "15.34.1",
+    "playwright": "1.64.1",
+    "typescript": "7.0.2",
+    "vite": "8.3.5",
+    "vitest": "5.0.5"
+  },
+  "overrides": {
+    "@firebase/firestore": {
+      "@grpc/grpc-js": "1.14.6"
+    }
+  }
+}

@@ -1,0 +1,151 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+    function verified() {
+      return signedIn() && request.auth.token.email_verified == true;
+    }
+    function isAdmin() {
+      return verified() && get(/databases/$(database)/documents/config/admin).data.uid == request.auth.uid;
+    }
+    function eventPath(eventId) {
+      return /databases/$(database)/documents/events/$(eventId);
+    }
+    function memberPath(eventId, uid) {
+      return /databases/$(database)/documents/events/$(eventId)/members/$(uid);
+    }
+    function runPath(eventId, runId) {
+      return /databases/$(database)/documents/events/$(eventId)/runs/$(runId);
+    }
+    function rosterOpen(eventId) {
+      return get(eventPath(eventId)).data.status == 'open';
+    }
+    function canJoin(eventId) {
+      return verified() && rosterOpen(eventId)
+        && request.time.toMillis() < get(eventPath(eventId)).data.signupDeadline;
+    }
+    function validEvent(d) {
+      return d.keys().hasAll(['name', 'signupDeadline', 'exchangeAt', 'timezone', 'budget', 'details', 'guidelines', 'giftIdeas', 'status', 'memberCount', 'activeRunId', 'createdAt'])
+        && d.keys().hasOnly(['name', 'signupDeadline', 'exchangeAt', 'timezone', 'budget', 'details', 'guidelines', 'giftIdeas', 'status', 'memberCount', 'activeRunId', 'createdAt'])
+        && d.name is string && d.name.size() > 0 && d.name.size() <= 100
+        && d.signupDeadline is int && d.signupDeadline > 0
+        && d.exchangeAt is int && d.exchangeAt > d.signupDeadline
+        && d.timezone == 'Europe/London'
+        && d.budget is number && d.budget > 0 && d.budget <= 100000
+        && d.details is string && d.details.size() <= 2000
+        && d.guidelines is list && d.guidelines.size() <= 12
+        && d.giftIdeas is list && d.giftIdeas.size() <= 20
+        && d.status in ['open', 'locked', 'drawing', 'drawn', 'archived']
+        && d.memberCount is int && d.memberCount >= 0
+        && (d.activeRunId == null || (d.activeRunId is string && d.activeRunId.size() > 0 && d.activeRunId.size() <= 128))
+        && d.createdAt is int && d.createdAt > 0;
+    }
+    function ownCountChange(eventId) {
+      let path = memberPath(eventId, request.auth.uid);
+      return canJoin(eventId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberCount'])
+        && ((!exists(path) && existsAfter(path) && request.resource.data.memberCount == resource.data.memberCount + 1)
+          || (exists(path) && !existsAfter(path) && request.resource.data.memberCount == resource.data.memberCount - 1));
+    }
+    function adminEventUpdate(eventId) {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      let before = resource.data;
+      let after = request.resource.data;
+      return isAdmin() && (
+        (changed.hasOnly(['name', 'signupDeadline', 'exchangeAt', 'timezone', 'budget', 'details', 'guidelines', 'giftIdeas'])
+          && (before.status in ['open', 'locked'] || after.signupDeadline == before.signupDeadline))
+        || (before.status == 'open' && changed.hasOnly(['memberCount']) && after.memberCount == before.memberCount - 1)
+        || (changed.hasOnly(['status']) && before.activeRunId == null
+          && ((before.status == 'open' && after.status == 'locked')
+            || (before.status == 'locked' && after.status == 'open')))
+        || (changed.hasOnly(['status', 'activeRunId']) && before.status == 'locked' && before.activeRunId == null
+          && after.status == 'drawing' && after.memberCount >= 3 && after.activeRunId != null
+          && existsAfter(runPath(eventId, after.activeRunId)))
+        || (changed.hasOnly(['status']) && before.status == 'drawing' && after.status == 'drawn'
+          && before.activeRunId != null)
+        || (changed.hasOnly(['status']) && before.status in ['open', 'locked', 'drawn'] && after.status == 'archived')
+      );
+    }
+    function validMember(d, uid) {
+      return d.keys().hasAll(['uid', 'name', 'joinedAt']) && d.keys().hasOnly(['uid', 'name', 'joinedAt'])
+        && d.uid == uid && d.name is string && d.name.size() > 0 && d.name.size() <= 100
+        && d.joinedAt is int && d.joinedAt > 0;
+    }
+
+    // Provision the sole organiser from the console or a trusted setup script.
+    match /config/admin {
+      allow get: if signedIn();
+      allow list, write: if false;
+    }
+
+    match /events/{eventId} {
+      allow read: if true;
+      allow create: if isAdmin() && validEvent(request.resource.data)
+        && request.resource.data.status == 'open'
+        && request.resource.data.memberCount == 0 && request.resource.data.activeRunId == null;
+      allow update: if validEvent(request.resource.data)
+        && ((verified() && ownCountChange(eventId)) || adminEventUpdate(eventId));
+      allow delete: if false;
+
+      match /members/{uid} {
+        allow get: if signedIn() && (request.auth.uid == uid || isAdmin());
+        allow list: if isAdmin();
+        allow create: if canJoin(eventId) && request.auth.uid == uid
+          && validMember(request.resource.data, uid)
+          && getAfter(eventPath(eventId)).data.memberCount == get(eventPath(eventId)).data.memberCount + 1
+          && getAfter(eventPath(eventId)).data.status == 'open';
+        allow update: if canJoin(eventId) && request.auth.uid == uid
+          && validMember(request.resource.data, uid)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name'])
+          && getAfter(eventPath(eventId)).data.status == 'open';
+        allow delete: if ((canJoin(eventId) && request.auth.uid == uid) || (isAdmin() && rosterOpen(eventId)))
+          && getAfter(eventPath(eventId)).data.memberCount == get(eventPath(eventId)).data.memberCount - 1
+          && getAfter(eventPath(eventId)).data.status == 'open';
+      }
+
+      match /runs/{runId} {
+        allow read: if isAdmin();
+        allow create: if isAdmin()
+          && get(eventPath(eventId)).data.status == 'locked'
+          && getAfter(eventPath(eventId)).data.status == 'drawing'
+          && getAfter(eventPath(eventId)).data.activeRunId == runId
+          && request.resource.data.keys().hasAll(['members', 'recipients', 'count', 'createdAt'])
+          && request.resource.data.keys().hasOnly(['members', 'recipients', 'count', 'createdAt'])
+          && request.resource.data.members is map && request.resource.data.recipients is map
+          && request.resource.data.count is int && request.resource.data.count >= 3
+          && request.resource.data.count == get(eventPath(eventId)).data.memberCount
+          && request.resource.data.members.size() == request.resource.data.count
+          && request.resource.data.recipients.size() == request.resource.data.count
+          && request.resource.data.members.keys().hasAll(request.resource.data.recipients.keys())
+          && request.resource.data.createdAt is int;
+        allow update, delete: if false;
+
+        match /assignments/{uid} {
+          function published() {
+            let event = get(eventPath(eventId)).data;
+            return event.status in ['drawn', 'archived'] && event.activeRunId == runId;
+          }
+          function plannedAssignment() {
+            let plan = get(runPath(eventId, runId)).data;
+            let d = request.resource.data;
+            return d.keys().hasAll(['giverUid', 'recipientUid', 'recipientName'])
+              && d.keys().hasOnly(['giverUid', 'recipientUid', 'recipientName'])
+              && d.giverUid == uid && d.recipientUid is string && d.recipientUid != uid
+              && uid in plan.members && d.recipientUid in plan.members
+              && d.recipientUid == plan.recipients[uid]
+              && d.recipientName == plan.members[d.recipientUid];
+          }
+          allow get: if isAdmin() || (signedIn() && request.auth.uid == uid && published());
+          allow list: if isAdmin();
+          allow create: if isAdmin() && get(eventPath(eventId)).data.status == 'drawing'
+            && get(eventPath(eventId)).data.activeRunId == runId && plannedAssignment();
+          // Identical retries are harmless, even if another tab has just published.
+          allow update: if isAdmin() && request.resource.data == resource.data;
+          allow delete: if false;
+        }
+      }
+    }
+  }
+}

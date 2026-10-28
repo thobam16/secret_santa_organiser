@@ -1,0 +1,7 @@
+{
+  "indexes": [],
+  "fieldOverrides": [
+    { "collectionGroup": "runs", "fieldPath": "members", "indexes": [] },
+    { "collectionGroup": "runs", "fieldPath": "recipients", "indexes": [] }
+  ]
+}
