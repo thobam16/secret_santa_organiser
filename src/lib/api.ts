@@ -2,20 +2,32 @@ import {
   collection,
   doc,
   getDoc,
+  getDocFromServer,
   getDocs,
   onSnapshot,
   runTransaction,
   writeBatch,
   type DocumentData,
   type DocumentSnapshot,
+  type Firestore,
 } from "firebase/firestore";
-import { auth, db } from "./firebase";
+import { deleteUser, type User } from "firebase/auth";
+import { auth, db, getEventServices } from "./firebase";
+import {
+  createEventAccount,
+  createTemporaryEventAccount,
+  generateEventPassword,
+  signInEvent,
+  signOutEvent,
+} from "./event-auth";
 import { makeAssignments, validateAssignments } from "./draw";
 import { validateEventInput } from "./dates";
 import type {
   Assignment,
   EventInput,
   Member,
+  ParticipantAccess,
+  ParticipantCredential,
   Recipient,
   SantaEvent,
 } from "../types";
@@ -213,10 +225,28 @@ export async function leaveEvent(eventId: string, uid: string): Promise<void> {
   const admin = await getIsAdmin(user.uid);
   if (!admin && uid !== user.uid)
     throw new Error("You can only change your own membership.");
-  await runTransaction(db, async (transaction) => {
+  await withdrawMember(db, eventId, uid, admin);
+}
+
+async function withdrawMember(
+  database: Firestore,
+  eventId: string,
+  memberUid: string,
+  admin = false,
+): Promise<void> {
+  const eventDocument = doc(database, "events", eventId);
+  const memberDocument = doc(database, "events", eventId, "members", memberUid);
+  const credentialDocument = doc(
+    database,
+    "events",
+    eventId,
+    "credentials",
+    memberUid,
+  );
+  await runTransaction(database, async (transaction) => {
     const [eventSnapshot, memberSnapshot] = await Promise.all([
-      transaction.get(eventRef(eventId)),
-      transaction.get(memberRef(eventId, uid)),
+      transaction.get(eventDocument),
+      transaction.get(memberDocument),
     ]);
     const event = eventFrom(eventSnapshot);
     if (
@@ -228,8 +258,15 @@ export async function leaveEvent(eventId: string, uid: string): Promise<void> {
       );
     }
     if (!memberSnapshot.exists()) return;
-    transaction.delete(memberRef(eventId, uid));
-    transaction.update(eventRef(eventId), {
+    const credential = await transaction.get(credentialDocument);
+    if (credential.exists()) {
+      transaction.delete(
+        doc(database, "participantAccess", credential.data().authUid),
+      );
+      transaction.delete(credentialDocument);
+    }
+    transaction.delete(memberDocument);
+    transaction.update(eventDocument, {
       memberCount: event.memberCount - 1,
     });
   });
@@ -401,6 +438,570 @@ export async function getRecipient(
   if (!assignment) return null;
   const recipient = await getDoc(memberRef(eventId, assignment.recipientUid));
   return { ...assignment, preferences: recipient.data()?.preferences ?? "" };
+}
+
+interface ParticipantSession {
+  database: Firestore;
+  member: Member;
+  user: User;
+  source: "event" | "legacy";
+}
+
+async function participantSession(
+  eventId: string,
+): Promise<ParticipantSession | null> {
+  const services = getEventServices(eventId);
+  await services.auth.authStateReady();
+  const eventUser = services.auth.currentUser;
+  if (eventUser) {
+    const access = await getDoc(
+      doc(services.db, "participantAccess", eventUser.uid),
+    );
+    if (services.auth.currentUser?.uid !== eventUser.uid)
+      throw new Error("Your event session changed. Try again.");
+    if (!access.exists()) return null;
+    const binding = access.data() as ParticipantAccess;
+    if (binding.eventId !== eventId) return null;
+    const member = await getDoc(
+      doc(services.db, "events", eventId, "members", binding.memberUid),
+    );
+    if (services.auth.currentUser?.uid !== eventUser.uid)
+      throw new Error("Your event session changed. Try again.");
+    return member.exists()
+      ? {
+          database: services.db,
+          member: member.data() as Member,
+          user: eventUser,
+          source: "event",
+        }
+      : null;
+  }
+  const legacyUser = auth.currentUser;
+  if (!legacyUser?.emailVerified) return null;
+  const member = await getDoc(memberRef(eventId, legacyUser.uid));
+  if (auth.currentUser?.uid !== legacyUser.uid || services.auth.currentUser)
+    throw new Error("Your event session changed. Try again.");
+  return member.exists()
+    ? {
+        database: db,
+        member: member.data() as Member,
+        user: legacyUser,
+        source: "legacy",
+      }
+    : null;
+}
+
+async function requireParticipant(
+  eventId: string,
+): Promise<ParticipantSession> {
+  const session = await participantSession(eventId);
+  if (!session)
+    throw new Error("Join this event or enter your event password.");
+  return session;
+}
+
+function assertParticipantSession(
+  eventId: string,
+  session: ParticipantSession,
+) {
+  const current =
+    session.source === "event"
+      ? getEventServices(eventId).auth.currentUser
+      : auth.currentUser;
+  if (current?.uid !== session.user.uid)
+    throw new Error("Your event session changed. Try again.");
+}
+
+export async function getParticipantMembership(
+  eventId: string,
+): Promise<Member | null> {
+  return (await participantSession(eventId))?.member ?? null;
+}
+
+export async function getParticipantPassword(
+  eventId: string,
+): Promise<string | null> {
+  const session = await participantSession(eventId);
+  if (!session) return null;
+  const credential = await getDoc(
+    doc(session.database, "events", eventId, "credentials", session.member.uid),
+  );
+  assertParticipantSession(eventId, session);
+  return credential.exists()
+    ? (credential.data() as ParticipantCredential).password
+    : null;
+}
+
+export async function getMemberPassword(
+  eventId: string,
+  memberUid: string,
+): Promise<string | null> {
+  const user = requireUser();
+  if (!(await getIsAdmin(user.uid)))
+    throw new Error(
+      "Only the organiser can view another participant’s password.",
+    );
+  const credential = await getDoc(
+    doc(db, "events", eventId, "credentials", memberUid),
+  );
+  if (auth.currentUser?.uid !== user.uid)
+    throw new Error("Your session changed. Try again.");
+  return credential.exists()
+    ? (credential.data() as ParticipantCredential).password
+    : null;
+}
+
+// Retain uncertain attempts only in memory. Retrying in this tab reuses the same
+// account and password rather than creating another participant.
+const pendingJoins = new Map<string, { user: User; password: string }>();
+const joiningEvents = new Map<
+  string,
+  Promise<{ member: Member; password: string }>
+>();
+
+function errorCode(error: unknown): string | undefined {
+  return error && typeof error === "object" && "code" in error
+    ? String(error.code)
+    : undefined;
+}
+
+function definitiveWriteRejection(error: unknown): boolean {
+  return [
+    "permission-denied",
+    "invalid-argument",
+    "failed-precondition",
+    "aborted",
+    "already-exists",
+    "not-found",
+  ].includes(errorCode(error) ?? "");
+}
+
+export function joinWithEventPassword(
+  eventId: string,
+  name: string,
+  preferences = "",
+): Promise<{ member: Member; password: string }> {
+  const pending = joiningEvents.get(eventId);
+  if (pending) return pending;
+  const operation = registerParticipant(eventId, name, preferences);
+  joiningEvents.set(eventId, operation);
+  void operation
+    .finally(() => {
+      if (joiningEvents.get(eventId) === operation)
+        joiningEvents.delete(eventId);
+    })
+    .catch(() => {});
+  return operation;
+}
+
+async function registerParticipant(
+  eventId: string,
+  name: string,
+  preferences: string,
+): Promise<{ member: Member; password: string }> {
+  const clean = cleanName(name);
+  const notes = cleanPreferences(preferences);
+  const existing = await participantSession(eventId);
+  if (existing) {
+    const password =
+      (await getParticipantPassword(eventId)) ??
+      (await issueParticipantPassword(eventId, existing.member.uid));
+    pendingJoins.delete(eventId);
+    return { member: existing.member, password };
+  }
+  const services = getEventServices(eventId);
+  let account = pendingJoins.get(eventId);
+  if (account && services.auth.currentUser?.uid !== account.user.uid) {
+    pendingJoins.delete(eventId);
+    account = undefined;
+  }
+  const newlyCreated = !account;
+  if (!account) {
+    // Avoid creating an Auth account for an event that is already closed.
+    const event = eventFrom(await getDoc(doc(services.db, "events", eventId)));
+    if (event.status !== "open" || event.signupDeadline <= Date.now())
+      throw new Error("Registration for this event has closed.");
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const password = generateEventPassword();
+      try {
+        account = {
+          user: await createEventAccount(eventId, password),
+          password,
+        };
+        break;
+      } catch (error) {
+        if (errorCode(error) !== "auth/email-already-in-use" || attempt === 2)
+          throw error;
+      }
+    }
+    if (!account)
+      throw new Error("Could not create an event password. Try again.");
+    pendingJoins.set(eventId, account);
+  }
+  const { user, password } = account;
+  const eventDocument = doc(services.db, "events", eventId);
+  const memberDocument = doc(
+    services.db,
+    "events",
+    eventId,
+    "members",
+    user.uid,
+  );
+  const accessDocument = doc(services.db, "participantAccess", user.uid);
+  const credentialDocument = doc(
+    services.db,
+    "events",
+    eventId,
+    "credentials",
+    user.uid,
+  );
+  let attemptedCommit = false;
+  try {
+    const member = await runTransaction(services.db, async (transaction) => {
+      const [eventSnapshot, memberSnapshot, accessSnapshot] = await Promise.all(
+        [
+          transaction.get(eventDocument),
+          transaction.get(memberDocument),
+          transaction.get(accessDocument),
+        ],
+      );
+      if (services.auth.currentUser?.uid !== user.uid)
+        throw new Error("Your event session changed. Try again.");
+      if (memberSnapshot.exists() && accessSnapshot.exists()) {
+        const binding = accessSnapshot.data() as ParticipantAccess;
+        if (binding.eventId === eventId && binding.memberUid === user.uid) {
+          const savedCredential = await transaction.get(credentialDocument);
+          if (
+            savedCredential.data()?.authUid === user.uid &&
+            savedCredential.data()?.password === password
+          )
+            return memberSnapshot.data() as Member;
+        }
+        throw new Error(
+          "This account already has a registration. Contact the organiser.",
+        );
+      }
+      if (memberSnapshot.exists() || accessSnapshot.exists())
+        throw new Error("This registration needs organiser support.");
+      const event = eventFrom(eventSnapshot);
+      if (event.status !== "open" || event.signupDeadline <= Date.now())
+        throw new Error("Registration for this event has closed.");
+      const member: Member = {
+        uid: user.uid,
+        name: clean,
+        preferences: notes,
+        joinedAt: Date.now(),
+      };
+      attemptedCommit = true;
+      transaction.set(memberDocument, member);
+      transaction.set(accessDocument, {
+        eventId,
+        memberUid: user.uid,
+      } satisfies ParticipantAccess);
+      transaction.set(credentialDocument, {
+        authUid: user.uid,
+        password,
+        createdAt: Date.now(),
+      } satisfies ParticipantCredential);
+      transaction.update(eventDocument, { memberCount: event.memberCount + 1 });
+      return member;
+    });
+    if (services.auth.currentUser?.uid !== user.uid)
+      throw new Error("Your event session changed. Try again.");
+    pendingJoins.delete(eventId);
+    return { member, password };
+  } catch (error) {
+    let safeToDiscard = !attemptedCommit && newlyCreated;
+    if (
+      (attemptedCommit || !newlyCreated) &&
+      services.auth.currentUser?.uid === user.uid
+    ) {
+      try {
+        const [member, access] = await Promise.all([
+          getDocFromServer(memberDocument),
+          getDocFromServer(accessDocument),
+        ]);
+        safeToDiscard =
+          !member.exists() &&
+          !access.exists() &&
+          definitiveWriteRejection(error);
+        if (
+          member.exists() &&
+          access.exists() &&
+          access.data().eventId === eventId &&
+          access.data().memberUid === user.uid
+        ) {
+          const saved = await getDocFromServer(credentialDocument);
+          if (
+            saved.data()?.authUid === user.uid &&
+            saved.data()?.password === password
+          ) {
+            pendingJoins.delete(eventId);
+            return { member: member.data() as Member, password };
+          }
+        }
+      } catch {
+        // An unavailable read is not proof that the registration failed.
+      }
+    }
+    if (safeToDiscard) {
+      pendingJoins.delete(eventId);
+      await deleteUser(user).catch(() => {});
+      throw error;
+    }
+    throw new Error(
+      "Registration could not be confirmed. Keep this browser open and try again before making another registration.",
+    );
+  }
+}
+
+export async function signInParticipant(
+  eventId: string,
+  password: string,
+): Promise<Member> {
+  try {
+    await signInEvent(eventId, password);
+  } catch (error) {
+    if (
+      [
+        "auth/invalid-credential",
+        "auth/user-not-found",
+        "auth/wrong-password",
+        "auth/user-disabled",
+      ].includes(errorCode(error) ?? "")
+    )
+      throw new Error("That password does not match this event.");
+    throw error;
+  }
+  const member = await getParticipantMembership(eventId);
+  if (!member) {
+    await signOutEvent(eventId);
+    throw new Error(
+      "No registration was found for that password. Contact the organiser.",
+    );
+  }
+  return member;
+}
+
+export async function signOutParticipant(eventId: string): Promise<boolean> {
+  const services = getEventServices(eventId);
+  await services.auth.authStateReady();
+  const hadEventSession = services.auth.currentUser !== null;
+  await signOutEvent(eventId);
+  pendingJoins.delete(eventId);
+  return hadEventSession;
+}
+
+export async function updateParticipant(
+  eventId: string,
+  name: string,
+  preferences = "",
+): Promise<void> {
+  const session = await requireParticipant(eventId);
+  const clean = cleanName(name);
+  const notes = cleanPreferences(preferences);
+  await runTransaction(session.database, async (transaction) => {
+    const eventDocument = doc(session.database, "events", eventId);
+    const memberDocument = doc(
+      session.database,
+      "events",
+      eventId,
+      "members",
+      session.member.uid,
+    );
+    const [eventSnapshot, member] = await Promise.all([
+      transaction.get(eventDocument),
+      transaction.get(memberDocument),
+    ]);
+    assertParticipantSession(eventId, session);
+    const event = eventFrom(eventSnapshot);
+    if (event.status !== "open" || event.signupDeadline <= Date.now())
+      throw new Error("Registration for this event has closed.");
+    if (!member.exists())
+      throw new Error("You are no longer registered for this event.");
+    transaction.update(memberDocument, { name: clean, preferences: notes });
+  });
+}
+
+export async function updateParticipantPreferences(
+  eventId: string,
+  preferences: string,
+): Promise<void> {
+  const session = await requireParticipant(eventId);
+  const clean = cleanPreferences(preferences);
+  await runTransaction(session.database, async (transaction) => {
+    const eventDocument = doc(session.database, "events", eventId);
+    const memberDocument = doc(
+      session.database,
+      "events",
+      eventId,
+      "members",
+      session.member.uid,
+    );
+    const [eventSnapshot, member] = await Promise.all([
+      transaction.get(eventDocument),
+      transaction.get(memberDocument),
+    ]);
+    assertParticipantSession(eventId, session);
+    if (eventFrom(eventSnapshot).status === "archived")
+      throw new Error("Preferences cannot change for an archived event.");
+    if (!member.exists())
+      throw new Error("You are no longer registered for this event.");
+    transaction.update(memberDocument, { preferences: clean });
+  });
+}
+
+export async function leaveParticipant(eventId: string): Promise<void> {
+  const session = await requireParticipant(eventId);
+  await withdrawMember(session.database, eventId, session.member.uid);
+  if (
+    session.source === "event" &&
+    getEventServices(eventId).auth.currentUser?.uid === session.user.uid
+  )
+    await signOutEvent(eventId);
+  pendingJoins.delete(eventId);
+}
+
+export async function getParticipantRecipient(
+  eventId: string,
+): Promise<Recipient | null> {
+  const session = await requireParticipant(eventId);
+  const event = eventFrom(
+    await getDoc(doc(session.database, "events", eventId)),
+  );
+  if (!["drawn", "archived"].includes(event.status) || !event.activeRunId)
+    return null;
+  const assignment = await getDoc(
+    doc(
+      session.database,
+      "events",
+      eventId,
+      "runs",
+      event.activeRunId,
+      "assignments",
+      session.member.uid,
+    ),
+  );
+  if (!assignment.exists()) return null;
+  const result = assignment.data() as Assignment;
+  const recipient = await getDoc(
+    doc(session.database, "events", eventId, "members", result.recipientUid),
+  );
+  assertParticipantSession(eventId, session);
+  return { ...result, preferences: recipient.data()?.preferences ?? "" };
+}
+
+export async function issueParticipantPassword(
+  eventId: string,
+  memberUid: string,
+): Promise<string> {
+  const issuer = requireUser();
+  if (
+    !issuer.emailVerified ||
+    (issuer.uid !== memberUid && !(await getIsAdmin(issuer.uid)))
+  )
+    throw new Error(
+      "Only the organiser or the original participant can issue this password.",
+    );
+  const memberDocument = memberRef(eventId, memberUid);
+  const credentialDocument = doc(
+    db,
+    "events",
+    eventId,
+    "credentials",
+    memberUid,
+  );
+  const member = await getDoc(memberDocument);
+  if (!member.exists()) throw new Error("This participant could not be found.");
+  const existing = await getDoc(credentialDocument);
+  if (auth.currentUser?.uid !== issuer.uid)
+    throw new Error("Your session changed. Try again.");
+  if (existing.exists())
+    return (existing.data() as ParticipantCredential).password;
+  let generated:
+    | {
+        password: string;
+        account: Awaited<ReturnType<typeof createTemporaryEventAccount>>;
+      }
+    | undefined;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const password = generateEventPassword();
+    try {
+      generated = {
+        password,
+        account: await createTemporaryEventAccount(eventId, password),
+      };
+      break;
+    } catch (error) {
+      if (errorCode(error) !== "auth/email-already-in-use" || attempt === 2)
+        throw error;
+    }
+  }
+  if (!generated)
+    throw new Error("Could not create an event password. Try again.");
+  const { password, account } = generated;
+  let attemptedCommit = false;
+  let accountBound = false;
+  try {
+    const result = await runTransaction(db, async (transaction) => {
+      const [currentMember, credential] = await Promise.all([
+        transaction.get(memberDocument),
+        transaction.get(credentialDocument),
+      ]);
+      if (auth.currentUser?.uid !== issuer.uid)
+        throw new Error("Your session changed. Try again.");
+      if (!currentMember.exists())
+        throw new Error("This participant could not be found.");
+      if (credential.exists())
+        return {
+          password: (credential.data() as ParticipantCredential).password,
+          created: false,
+        };
+      attemptedCommit = true;
+      transaction.set(doc(db, "participantAccess", account.uid), {
+        eventId,
+        memberUid,
+      } satisfies ParticipantAccess);
+      transaction.set(credentialDocument, {
+        authUid: account.uid,
+        password,
+        createdAt: Date.now(),
+      } satisfies ParticipantCredential);
+      return { password, created: true };
+    });
+    accountBound = result.created;
+    if (auth.currentUser?.uid !== issuer.uid)
+      throw new Error("Your session changed. Try again.");
+    if (!accountBound) await account.discard();
+    return result.password;
+  } catch (error) {
+    let safeToDiscard = !attemptedCommit;
+    if (attemptedCommit && auth.currentUser?.uid === issuer.uid) {
+      try {
+        const saved = await getDocFromServer(credentialDocument);
+        if (saved.data()?.authUid === account.uid) {
+          accountBound = true;
+          return (saved.data() as ParticipantCredential).password;
+        }
+        if (saved.exists()) {
+          // A competing issuer can win before the security-rule evaluation,
+          // producing permission-denied rather than a transaction retry.
+          // Return that immutable credential and discard only our unused account.
+          await account.discard();
+          return (saved.data() as ParticipantCredential).password;
+        }
+        // Absence after an unavailable/timed-out commit is not conclusive: the
+        // original request may still arrive. Retain that account conservatively.
+        safeToDiscard = definitiveWriteRejection(error);
+      } catch {
+        // Preserve the account if the commit outcome cannot be verified.
+      }
+    }
+    if (safeToDiscard) await account.discard().catch(() => {});
+    throw error;
+  } finally {
+    await account.dispose();
+  }
 }
 
 export async function archiveEvent(eventId: string): Promise<void> {

@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   Archive,
   ArrowLeft,
@@ -20,7 +20,9 @@ import { useSite } from "../context";
 import {
   archiveEvent,
   getAssignment,
+  getMemberPassword,
   getMembers,
+  issueParticipantPassword,
   leaveEvent,
   runDraw,
   saveEvent,
@@ -28,7 +30,13 @@ import {
 } from "../lib/api";
 import { validateEventInput } from "../lib/dates";
 import { fromLondonInput, toLondonInput } from "../lib/date-input";
-import { Feedback, Loading, navigate, useAction } from "../lib/ui";
+import {
+  Feedback,
+  Loading,
+  friendlyError,
+  navigate,
+  useAction,
+} from "../lib/ui";
 import { StatusPill, Countdown } from "../components/EventBits";
 import {
   DEFAULT_GIFT_IDEAS,
@@ -210,7 +218,112 @@ function EventForm({
   );
 }
 
+function MemberPassword({
+  eventId,
+  member,
+}: {
+  eventId: string;
+  member: Member;
+}) {
+  const [password, setPassword] = useState<string | null | undefined>();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const requestGeneration = useRef(0);
+
+  const conceal = () => {
+    requestGeneration.current += 1;
+    setPassword(undefined);
+    setBusy(false);
+    setError("");
+  };
+
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.hidden) conceal();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      requestGeneration.current += 1;
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, []);
+
+  const loadPassword = async (create = false) => {
+    const generation = ++requestGeneration.current;
+    setBusy(true);
+    setError("");
+    try {
+      const value = await (create
+        ? issueParticipantPassword(eventId, member.uid)
+        : getMemberPassword(eventId, member.uid));
+      if (requestGeneration.current === generation && !document.hidden)
+        setPassword(value);
+    } catch (cause) {
+      if (requestGeneration.current === generation && !document.hidden)
+        setError(friendlyError(cause));
+    } finally {
+      if (requestGeneration.current === generation) setBusy(false);
+    }
+  };
+
+  const expanded = password !== undefined || busy;
+  return (
+    <div className="participant-password" aria-busy={busy}>
+      <div className="participant-password-control">
+        {typeof password === "string" ? (
+          <code
+            className="event-password-value"
+            data-testid={`password-${member.uid}`}
+          >
+            {password}
+          </code>
+        ) : password === null ? (
+          <span className="field-help">No password yet.</span>
+        ) : (
+          <span className="masked" aria-label="Password hidden">
+            ••••••••
+          </span>
+        )}
+        <button
+          type="button"
+          className="icon-button"
+          aria-label={`${expanded ? "Hide" : "Reveal"} password for ${member.name}`}
+          aria-expanded={expanded}
+          onClick={() => {
+            if (expanded) conceal();
+            else void loadPassword();
+          }}
+        >
+          {expanded ? <EyeOff size={18} /> : <Eye size={18} />}
+        </button>
+      </div>
+      {busy && (
+        <span className="field-help" role="status">
+          Loading…
+        </span>
+      )}
+      {password === null && (
+        <button
+          type="button"
+          className="button secondary small"
+          disabled={busy}
+          aria-label={`Create password for ${member.name}`}
+          onClick={() => void loadPassword(true)}
+        >
+          Create password
+        </button>
+      )}
+      {error && (
+        <span className="password-error" role="alert">
+          {error}
+        </span>
+      )}
+    </div>
+  );
+}
+
 function ManageEvent({ event }: { event: SantaEvent }) {
+  const { user } = useSite();
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [listError, setListError] = useState("");
@@ -372,10 +485,11 @@ function ManageEvent({ event }: { event: SantaEvent }) {
             </div>
           ) : (
             <div className="table-scroll">
-              <table className="participant-table">
+              <table className="participant-table with-passwords">
                 <thead>
                   <tr>
                     <th scope="col">Participant</th>
+                    <th scope="col">Password</th>
                     <th scope="col">{drawn ? "Gift recipient" : "Status"}</th>
                     <th scope="col">
                       <span className="sr-only">Actions</span>
@@ -392,6 +506,28 @@ function ManageEvent({ event }: { event: SantaEvent }) {
                           </span>
                           {member.name}
                         </span>
+                        <details
+                          className="participant-preferences"
+                          data-testid={`participant-preferences-${member.uid}`}
+                        >
+                          <summary
+                            aria-label={`Gift preferences for ${member.name}`}
+                          >
+                            Gift preferences
+                          </summary>
+                          <p className="preserve-lines">
+                            {member.preferences?.trim()
+                              ? member.preferences
+                              : "No preferences provided."}
+                          </p>
+                        </details>
+                      </td>
+                      <td>
+                        <MemberPassword
+                          key={`${event.id}:${user?.uid}:${member.uid}`}
+                          eventId={event.id}
+                          member={member}
+                        />
                       </td>
                       <td>
                         {drawn ? (

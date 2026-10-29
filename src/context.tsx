@@ -1,6 +1,7 @@
 import { createContext, useContext } from "react";
 import type { User } from "firebase/auth";
 import type { SantaEvent, Member } from "./types";
+import type { ParticipantSession } from "./lib/participants";
 
 export interface SiteContextValue {
   user: User | null;
@@ -13,6 +14,8 @@ export interface SiteContextValue {
   membershipsLoading: boolean;
   reloadMemberships: () => Promise<void>;
   refreshIdentity: () => Promise<void>;
+  participantSessions: Record<string, ParticipantSession>;
+  reloadParticipant: (eventId: string) => Promise<void>;
 }
 export const SiteContext = createContext<SiteContextValue | null>(null);
 export function useSite() {

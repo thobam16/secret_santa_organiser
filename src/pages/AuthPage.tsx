@@ -1,6 +1,5 @@
 import { useState, type FormEvent } from "react";
 import {
-  createUserWithEmailAndPassword,
   sendEmailVerification,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
@@ -12,7 +11,7 @@ import { Feedback, Loading, navigate, useAction } from "../lib/ui";
 
 export default function AuthPage() {
   const { user, authReady, refreshIdentity } = useSite();
-  const [mode, setMode] = useState<"signin" | "signup" | "reset">("signin");
+  const [mode, setMode] = useState<"signin" | "reset">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -30,6 +29,7 @@ export default function AuthPage() {
     action.setError("");
     action.setSuccess("");
     setPassword("");
+    setShowPassword(false);
   };
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -39,29 +39,17 @@ export default function AuthPage() {
           await sendPasswordResetEmail(auth, email.trim());
           return;
         }
-        if (mode === "signup") {
-          const credential = await createUserWithEmailAndPassword(
-            auth,
-            email.trim(),
-            password,
-          );
-          setPassword("");
-          await sendEmailVerification(credential.user);
-        } else {
-          const credential = await signInWithEmailAndPassword(
-            auth,
-            email.trim(),
-            password,
-          );
-          setPassword("");
-          if (credential.user.emailVerified) navigate(next);
-        }
+        const credential = await signInWithEmailAndPassword(
+          auth,
+          email.trim(),
+          password,
+        );
+        setPassword("");
+        if (credential.user.emailVerified) navigate(next);
       },
       mode === "reset"
         ? "If an account exists for that email, a reset link has been sent. Check your inbox and spam folder."
-        : mode === "signup"
-          ? "Verification email sent. Check your inbox and spam folder."
-          : "",
+        : "",
     );
   };
   return (
@@ -128,29 +116,11 @@ export default function AuthPage() {
             <>
               <h1>
                 {mode === "signin"
-                  ? "Sign in"
-                  : mode === "signup"
-                    ? "Create account"
-                    : "Reset password"}
+                  ? next === "/admin"
+                    ? "Organiser sign in"
+                    : "Email sign in"
+                  : "Reset password"}
               </h1>
-              {mode !== "reset" && (
-                <div className="tabs" aria-label="Account options">
-                  <button
-                    className={`tab ${mode === "signin" ? "active" : ""}`}
-                    onClick={() => switchMode("signin")}
-                    disabled={action.busy}
-                  >
-                    Sign in
-                  </button>
-                  <button
-                    className={`tab ${mode === "signup" ? "active" : ""}`}
-                    onClick={() => switchMode("signup")}
-                    disabled={action.busy}
-                  >
-                    Create account
-                  </button>
-                </div>
-              )}
               <Feedback error={action.error} success={action.success} />
               <form onSubmit={submit}>
                 <label className="field">
@@ -172,12 +142,7 @@ export default function AuthPage() {
                     <div className="password-field">
                       <input
                         type={showPassword ? "text" : "password"}
-                        autoComplete={
-                          mode === "signup"
-                            ? "new-password"
-                            : "current-password"
-                        }
-                        minLength={mode === "signup" ? 8 : undefined}
+                        autoComplete="current-password"
                         maxLength={128}
                         required
                         value={password}
@@ -199,9 +164,6 @@ export default function AuthPage() {
                         )}
                       </button>
                     </div>
-                    {mode === "signup" && (
-                      <span className="field-help">At least 8 characters.</span>
-                    )}
                   </label>
                 )}
                 <button
@@ -212,34 +174,30 @@ export default function AuthPage() {
                     ? "Please wait…"
                     : mode === "signin"
                       ? "Sign in"
-                      : mode === "signup"
-                        ? "Create account"
-                        : "Send reset link"}
+                      : "Send reset link"}
                   <ArrowRight size={17} />
                 </button>
               </form>
               {mode === "signin" ? (
                 <button
                   className="inline-link auth-help"
+                  disabled={action.busy}
                   onClick={() => switchMode("reset")}
                 >
                   Forgot your password?
                 </button>
-              ) : mode === "reset" ? (
+              ) : (
                 <button
                   className="inline-link auth-help"
+                  disabled={action.busy}
                   onClick={() => switchMode("signin")}
                 >
                   Back to sign in
                 </button>
-              ) : (
-                <p className="field-help auth-help">
-                  Verify your email before joining an event.
-                </p>
               )}
               <p className="privacy-note">
-                Your email is used for your account. Your name is visible to the
-                organiser and the person buying your gift.
+                Already joined with email? Sign in here, then get your password
+                from the event page.
               </p>
             </>
           )}

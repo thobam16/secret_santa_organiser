@@ -29,9 +29,21 @@ import {
 import {
   getAssignment,
   getRecipient,
+  getMemberPassword,
+  getParticipantMembership,
+  getParticipantPassword,
+  getParticipantRecipient,
+  issueParticipantPassword,
   joinEvent,
+  joinWithEventPassword,
+  leaveEvent,
+  leaveParticipant,
   runDraw,
   saveEvent,
+  signInParticipant,
+  signOutParticipant,
+  updateParticipant,
+  updateParticipantPreferences,
   updatePreferences,
 } from "../src/lib/api";
 import { validateAssignments } from "../src/lib/draw";
@@ -40,7 +52,161 @@ import type { Assignment, Member } from "../src/types";
 const apiSession = vi.hoisted(() => ({
   database: null as Firestore | null,
   currentUser: null as { uid: string; emailVerified: boolean } | null,
+  anonymous: null as Firestore | null,
+  guestDatabase: null as ((uid: string) => Firestore) | null,
+  eventSessions: new Map<
+    string,
+    {
+      database: Firestore;
+      currentUser: { uid: string; emailVerified: boolean } | null;
+    }
+  >(),
+  accounts: new Map<
+    string,
+    { database: Firestore; user: { uid: string; emailVerified: boolean } }
+  >(),
+  accountCounter: 0,
+  passwordCounter: 0,
+  passwordCandidates: [
+    "holly-cabinet-orchestra",
+    "cocoa-bonfire-elephant",
+    "jingle-hammock-lullaby",
+    "merry-compass-pineapple",
+    "frost-lantern-meadow",
+    "candle-octopus-coconut",
+  ],
+  creationAttempts: [] as string[],
+  creationErrors: [] as string[],
+  discarded: [] as string[],
+  afterAccountCreated: null as (() => Promise<void>) | null,
+  throwAfterCommit: false,
+  uncertainCommitWithoutWrite: false,
+  blockServerReads: false,
 }));
+vi.mock("firebase/firestore", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("firebase/firestore")>();
+  return {
+    ...actual,
+    async runTransaction(...args: Parameters<typeof actual.runTransaction>) {
+      if (apiSession.uncertainCommitWithoutWrite) {
+        apiSession.uncertainCommitWithoutWrite = false;
+        const transaction = {
+          get: actual.getDoc,
+          set() {
+            return transaction;
+          },
+          update() {
+            return transaction;
+          },
+          delete() {
+            return transaction;
+          },
+        } as unknown as import("firebase/firestore").Transaction;
+        await args[1](transaction);
+        throw Object.assign(new Error("Commit outcome unavailable"), {
+          code: "unavailable",
+        });
+      }
+      const result = await actual.runTransaction(...args);
+      if (apiSession.throwAfterCommit) {
+        apiSession.throwAfterCommit = false;
+        throw Object.assign(new Error("Connection lost after commit"), {
+          code: "unavailable",
+        });
+      }
+      return result;
+    },
+    getDocFromServer(...args: Parameters<typeof actual.getDocFromServer>) {
+      if (apiSession.blockServerReads)
+        return Promise.reject(
+          Object.assign(new Error("Connection unavailable"), {
+            code: "unavailable",
+          }),
+        );
+      return actual.getDocFromServer(...args);
+    },
+  };
+});
+vi.mock("firebase/auth", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("firebase/auth")>();
+  return {
+    ...actual,
+    async deleteUser(user: { uid: string }) {
+      apiSession.discarded.push(user.uid);
+      for (const session of apiSession.eventSessions.values()) {
+        if (session.currentUser?.uid === user.uid) session.currentUser = null;
+      }
+      for (const [key, account] of apiSession.accounts) {
+        if (account.user.uid === user.uid) apiSession.accounts.delete(key);
+      }
+    },
+  };
+});
+vi.mock("../src/lib/event-auth", () => {
+  const keyFor = (eventId: string, password: string) =>
+    `${eventId}:${password.toLowerCase().replace(/[\s-]/g, "")}`;
+  const create = (eventId: string, password: string) => {
+    apiSession.creationAttempts.push(password);
+    const code =
+      apiSession.creationErrors.shift() ??
+      (apiSession.accounts.has(keyFor(eventId, password))
+        ? "auth/email-already-in-use"
+        : undefined);
+    if (code)
+      throw Object.assign(new Error("Account creation failed"), { code });
+    const uid = `guest-${++apiSession.accountCounter}`;
+    const account = {
+      database: apiSession.guestDatabase!(uid),
+      user: { uid, emailVerified: false },
+    };
+    apiSession.accounts.set(keyFor(eventId, password), account);
+    return account;
+  };
+  return {
+    generateEventPassword: () => {
+      const password =
+        apiSession.passwordCandidates[apiSession.passwordCounter++];
+      if (!password) throw new Error("Test password fixtures exhausted");
+      return password;
+    },
+    async createEventAccount(eventId: string, password: string) {
+      const account = create(eventId, password);
+      apiSession.eventSessions.set(eventId, {
+        database: account.database,
+        currentUser: account.user,
+      });
+      await apiSession.afterAccountCreated?.();
+      return account.user;
+    },
+    async signInEvent(eventId: string, password: string) {
+      const account = apiSession.accounts.get(keyFor(eventId, password));
+      if (!account)
+        throw Object.assign(new Error("Invalid credential"), {
+          code: "auth/invalid-credential",
+        });
+      apiSession.eventSessions.set(eventId, {
+        database: account.database,
+        currentUser: account.user,
+      });
+      return account.user;
+    },
+    async signOutEvent(eventId: string) {
+      const session = apiSession.eventSessions.get(eventId);
+      if (session) session.currentUser = null;
+    },
+    async createTemporaryEventAccount(eventId: string, password: string) {
+      const account = create(eventId, password);
+      return {
+        uid: account.user.uid,
+        async dispose() {},
+        async discard() {
+          apiSession.discarded.push(account.user.uid);
+          apiSession.accounts.delete(keyFor(eventId, password));
+        },
+      };
+    },
+  };
+});
 vi.mock("../src/lib/firebase", () => ({
   get db() {
     return apiSession.database;
@@ -49,6 +215,22 @@ vi.mock("../src/lib/firebase", () => ({
     get currentUser() {
       return apiSession.currentUser;
     },
+  },
+  getEventServices(eventId: string) {
+    return {
+      get db() {
+        return (
+          apiSession.eventSessions.get(eventId)?.database ??
+          apiSession.anonymous
+        );
+      },
+      auth: {
+        get currentUser() {
+          return apiSession.eventSessions.get(eventId)?.currentUser ?? null;
+        },
+        async authStateReady() {},
+      },
+    };
   },
 }));
 
@@ -161,6 +343,26 @@ describe.skipIf(!enabled)("Firestore access and lifecycle rules", () => {
     });
     apiSession.database = admin;
     apiSession.currentUser = { uid: "organiser", emailVerified: true };
+    apiSession.anonymous = anonymous;
+    apiSession.guestDatabase = (uid) =>
+      environment
+        .authenticatedContext(uid, {
+          email: `${"a".repeat(64)}@event.santa.invalid`,
+          email_verified: false,
+          firebase: { sign_in_provider: "password" },
+        })
+        .firestore() as unknown as Firestore;
+    apiSession.eventSessions.clear();
+    apiSession.accounts.clear();
+    apiSession.accountCounter = 0;
+    apiSession.passwordCounter = 0;
+    apiSession.creationAttempts = [];
+    apiSession.creationErrors = [];
+    apiSession.discarded = [];
+    apiSession.afterAccountCreated = null;
+    apiSession.throwAfterCommit = false;
+    apiSession.uncertainCommitWithoutWrite = false;
+    apiSession.blockServerReads = false;
   });
 
   afterAll(async () => {
@@ -884,6 +1086,490 @@ describe.skipIf(!enabled)("Firestore access and lifecycle rules", () => {
       "manchester",
     );
     expect(await getAssignment("manchester", "alice")).toEqual(before);
+  });
+
+  async function createPasswordFor(mode: "signup" | "issuer") {
+    if (mode === "signup") {
+      const joined = await joinWithEventPassword("manchester", "Guest");
+      return { password: joined.password, memberUid: joined.member.uid };
+    }
+    return {
+      password: await issueParticipantPassword("manchester", "alice"),
+      memberUid: "alice",
+    };
+  }
+
+  it.each(["signup", "issuer"] as const)(
+    "%s retries a three-word password collision without reusing the existing account",
+    async (mode) => {
+      const collision = apiSession.passwordCandidates[0];
+      const key = `manchester:${collision.replaceAll("-", "")}`;
+      const previousAccount = {
+        database: apiSession.guestDatabase!("previous-word-account"),
+        user: { uid: "previous-word-account", emailVerified: false },
+      };
+      apiSession.accounts.set(key, previousAccount);
+      const result = await createPasswordFor(mode);
+      expect(result.password).toBe(apiSession.passwordCandidates[1]);
+      expect(result.password).toMatch(/^[a-z]+-[a-z]+-[a-z]+$/);
+      expect(apiSession.creationAttempts).toEqual(
+        apiSession.passwordCandidates.slice(0, 2),
+      );
+      expect(apiSession.accountCounter).toBe(1);
+      expect(apiSession.accounts.get(key)).toBe(previousAccount);
+      expect(apiSession.discarded).toEqual([]);
+      expect(await getMemberPassword("manchester", result.memberUid)).toBe(
+        result.password,
+      );
+      expect(
+        (
+          await getDoc(doc(admin, "participantAccess/previous-word-account"))
+        ).exists(),
+      ).toBe(false);
+      expect(
+        (await getDoc(doc(admin, "events/manchester"))).data()?.memberCount,
+      ).toBe(mode === "signup" ? 4 : 3);
+    },
+  );
+
+  it.each(["signup", "issuer"] as const)(
+    "%s stops after three password collisions without storing partial access",
+    async (mode) => {
+      apiSession.creationErrors = Array(4).fill("auth/email-already-in-use");
+      await expect(createPasswordFor(mode)).rejects.toMatchObject({
+        code: "auth/email-already-in-use",
+      });
+      expect(apiSession.creationAttempts).toEqual(
+        apiSession.passwordCandidates.slice(0, 3),
+      );
+      expect(apiSession.passwordCounter).toBe(3);
+      expect(apiSession.creationErrors).toHaveLength(1);
+      expect(apiSession.accountCounter).toBe(0);
+      expect(apiSession.discarded).toEqual([]);
+      expect(await getMemberPassword("manchester", "alice")).toBeNull();
+      expect(
+        (await getDoc(doc(admin, "events/manchester"))).data()?.memberCount,
+      ).toBe(3);
+    },
+  );
+
+  it.each([
+    { mode: "signup" as const, code: "auth/network-request-failed" },
+    { mode: "issuer" as const, code: "auth/network-request-failed" },
+    { mode: "signup" as const, code: "auth/too-many-requests" },
+    { mode: "issuer" as const, code: "auth/too-many-requests" },
+  ])("$mode does not retry $code", async ({ mode, code }) => {
+    apiSession.creationErrors = [code];
+    await expect(createPasswordFor(mode)).rejects.toMatchObject({ code });
+    expect(apiSession.creationAttempts).toHaveLength(1);
+    expect(apiSession.passwordCounter).toBe(1);
+    expect(apiSession.accountCounter).toBe(0);
+    expect(apiSession.accounts.size).toBe(0);
+    expect(apiSession.currentUser?.uid).toBe("organiser");
+  });
+
+  it.each(["signup", "issuer"] as const)(
+    "%s stops if a collision is followed by a different authentication failure",
+    async (mode) => {
+      apiSession.creationErrors = [
+        "auth/email-already-in-use",
+        "auth/operation-not-allowed",
+      ];
+      await expect(createPasswordFor(mode)).rejects.toMatchObject({
+        code: "auth/operation-not-allowed",
+      });
+      expect(apiSession.creationAttempts).toHaveLength(2);
+      expect(apiSession.passwordCounter).toBe(2);
+      expect(apiSession.accountCounter).toBe(0);
+      expect(apiSession.discarded).toEqual([]);
+    },
+  );
+
+  it("creates an unverified event-password participant with atomic private access records", async () => {
+    const result = await joinWithEventPassword(
+      "manchester",
+      "  Guest  Person  ",
+      "  Books  ",
+    );
+    expect(result.member.name).toBe("Guest Person");
+    expect(result.member.preferences).toBe("Books");
+    expect(apiSession.currentUser?.uid).toBe("organiser");
+    expect(
+      apiSession.eventSessions.get("manchester")?.currentUser?.emailVerified,
+    ).toBe(false);
+    expect(await getParticipantMembership("manchester")).toEqual(result.member);
+    expect(await getParticipantPassword("manchester")).toBe(result.password);
+    expect(await getMemberPassword("manchester", result.member.uid)).toBe(
+      result.password,
+    );
+    const member = (
+      await getDoc(doc(admin, `events/manchester/members/${result.member.uid}`))
+    ).data();
+    expect(Object.keys(member!).sort()).toEqual([
+      "joinedAt",
+      "name",
+      "preferences",
+      "uid",
+    ]);
+    expect(
+      (
+        await getDoc(doc(admin, `participantAccess/${result.member.uid}`))
+      ).data(),
+    ).toEqual({
+      eventId: "manchester",
+      memberUid: result.member.uid,
+    });
+    expect(
+      (await getDoc(doc(admin, "events/manchester"))).data()?.memberCount,
+    ).toBe(4);
+  });
+
+  it("deduplicates simultaneous joins in one session and keeps event passwords independent", async () => {
+    const [first, duplicate] = await Promise.all([
+      joinWithEventPassword("manchester", "Same name"),
+      joinWithEventPassword("manchester", "Same name"),
+    ]);
+    expect(duplicate).toEqual(first);
+    expect(apiSession.accountCounter).toBe(1);
+    const second = await joinWithEventPassword("sheffield", "Same name");
+    expect(second.member.uid).not.toBe(first.member.uid);
+    expect(second.password).not.toBe(first.password);
+    expect(await getParticipantPassword("manchester")).toBe(first.password);
+    expect(await getParticipantPassword("sheffield")).toBe(second.password);
+    expect(await signOutParticipant("manchester")).toBe(true);
+    expect(await getParticipantMembership("manchester")).toBeNull();
+    expect(await getParticipantMembership("sheffield")).toEqual(second.member);
+    expect(apiSession.currentUser?.uid).toBe("organiser");
+    await expect(
+      signInParticipant("manchester", second.password),
+    ).rejects.toThrow("does not match this event");
+    expect(
+      await signInParticipant(
+        "manchester",
+        first.password.toUpperCase().replaceAll("-", " "),
+      ),
+    ).toEqual(first.member);
+  });
+
+  it("withdraws guest membership, password and access together and rejects returning with the old password", async () => {
+    const joined = await joinWithEventPassword("manchester", "Guest");
+    await leaveParticipant("manchester");
+    expect(
+      (
+        await getDoc(
+          doc(admin, `events/manchester/members/${joined.member.uid}`),
+        )
+      ).exists(),
+    ).toBe(false);
+    expect(
+      (
+        await getDoc(
+          doc(admin, `events/manchester/credentials/${joined.member.uid}`),
+        )
+      ).exists(),
+    ).toBe(false);
+    expect(
+      (
+        await getDoc(doc(admin, `participantAccess/${joined.member.uid}`))
+      ).exists(),
+    ).toBe(false);
+    expect(
+      (await getDoc(doc(admin, "events/manchester"))).data()?.memberCount,
+    ).toBe(3);
+    expect(apiSession.eventSessions.get("manchester")?.currentUser).toBeNull();
+    await expect(
+      signInParticipant("manchester", joined.password),
+    ).rejects.toThrow("No registration");
+  });
+
+  it("removes guest access when the organiser removes a participant", async () => {
+    const joined = await joinWithEventPassword("manchester", "Guest");
+    await leaveEvent("manchester", joined.member.uid);
+    expect(await getParticipantMembership("manchester")).toBeNull();
+    expect(await getMemberPassword("manchester", joined.member.uid)).toBeNull();
+    expect(
+      (
+        await getDoc(doc(admin, `participantAccess/${joined.member.uid}`))
+      ).exists(),
+    ).toBe(false);
+  });
+
+  it("issues event access for a legacy member without changing their completed draw", async () => {
+    await publishDraw();
+    const originalMember = (
+      await getDoc(doc(admin, "events/manchester/members/alice"))
+    ).data();
+    apiSession.database = alice;
+    apiSession.currentUser = { uid: "alice", emailVerified: true };
+    expect(await getParticipantMembership("manchester")).toEqual(
+      originalMember,
+    );
+    const password = await issueParticipantPassword("manchester", "alice");
+    expect(await issueParticipantPassword("manchester", "alice")).toBe(
+      password,
+    );
+    expect(apiSession.accountCounter).toBe(1);
+    expect(apiSession.currentUser?.uid).toBe("alice");
+    expect(apiSession.eventSessions.get("manchester")).toBeUndefined();
+    expect(await signInParticipant("manchester", password)).toEqual(
+      originalMember,
+    );
+    expect(
+      apiSession.eventSessions.get("manchester")?.currentUser?.uid,
+    ).not.toBe("alice");
+    expect(await getParticipantRecipient("manchester")).toEqual({
+      ...assignment,
+      preferences: "",
+    });
+    expect(await getAssignment("manchester", "alice")).toEqual(assignment);
+    expect(
+      (await getDoc(doc(admin, "events/manchester/members/alice"))).data(),
+    ).toEqual(originalMember);
+    expect(
+      (await getDoc(doc(admin, "events/manchester"))).data()?.activeRunId,
+    ).toBe("run-one");
+  });
+
+  it("allows organiser issuance after archive while denying issuance for another participant", async () => {
+    await publishDraw();
+    await updateDoc(doc(admin, "events/manchester"), { status: "archived" });
+    const password = await issueParticipantPassword("manchester", "alice");
+    expect((await signInParticipant("manchester", password)).uid).toBe("alice");
+    expect(await getParticipantRecipient("manchester")).toEqual({
+      ...assignment,
+      preferences: "",
+    });
+    apiSession.database = bob;
+    apiSession.currentUser = { uid: "bob", emailVerified: true };
+    await expect(
+      issueParticipantPassword("manchester", "alice"),
+    ).rejects.toThrow("Only the organiser");
+    await expect(getMemberPassword("manchester", "alice")).rejects.toThrow(
+      "Only the organiser",
+    );
+  });
+
+  it("makes concurrent password issuance idempotent and discards only the unused temporary account", async () => {
+    const [first, second] = await Promise.all([
+      issueParticipantPassword("manchester", "alice"),
+      issueParticipantPassword("manchester", "alice"),
+    ]);
+    expect(first).toBe(second);
+    expect(apiSession.accounts.size).toBe(1);
+    const credential = (
+      await getDoc(doc(admin, "events/manchester/credentials/alice"))
+    ).data()!;
+    expect(apiSession.discarded).not.toContain(credential.authUid);
+    expect(
+      (
+        await getDoc(doc(admin, `participantAccess/${credential.authUid}`))
+      ).data()?.memberUid,
+    ).toBe("alice");
+  });
+
+  it("never exposes passwords to assigned givers, anonymous users or roster listings", async () => {
+    await issueParticipantPassword("manchester", "bob");
+    await publishDraw();
+    await assertSucceeds(getDoc(doc(alice, "events/manchester/members/bob")));
+    for (const database of [alice, outsider, anonymous]) {
+      await assertFails(
+        getDoc(doc(database, "events/manchester/credentials/bob")),
+      );
+      await assertFails(
+        getDocs(collection(database, "events/manchester/credentials")),
+      );
+      await assertFails(getDocs(collection(database, "participantAccess")));
+    }
+    await assertSucceeds(getDoc(doc(bob, "events/manchester/credentials/bob")));
+    await assertFails(
+      getDocs(collection(admin, "events/manchester/credentials")),
+    );
+    await assertFails(getDocs(collection(admin, "participantAccess")));
+    const unverifiedBob = environment
+      .authenticatedContext("bob", { email_verified: false })
+      .firestore();
+    await assertFails(
+      getDoc(doc(unverifiedBob, "events/manchester/credentials/bob")),
+    );
+  });
+
+  it("rejects guest access without a password-provider account and complete atomic join", async () => {
+    const guest = apiSession.guestDatabase!("guest-direct");
+    await assertFails(join(guest, "guest-direct"));
+    await assertFails(
+      setDoc(doc(guest, "participantAccess/guest-direct"), {
+        eventId: "manchester",
+        memberUid: "alice",
+      }),
+    );
+    for (const claims of [
+      {
+        email: "person@example.com",
+        email_verified: false,
+        firebase: { sign_in_provider: "password" },
+      },
+      {
+        email: `${"a".repeat(64)}@event.santa.invalid`,
+        email_verified: false,
+        firebase: { sign_in_provider: "anonymous" },
+      },
+    ] as const) {
+      const database = environment
+        .authenticatedContext("invalid-guest", claims)
+        .firestore();
+      const batch = writeBatch(database);
+      batch.set(doc(database, "events/manchester/members/invalid-guest"), {
+        uid: "invalid-guest",
+        name: "Guest",
+        joinedAt: NOW,
+      });
+      batch.set(doc(database, "participantAccess/invalid-guest"), {
+        eventId: "manchester",
+        memberUid: "invalid-guest",
+      });
+      batch.set(doc(database, "events/manchester/credentials/invalid-guest"), {
+        authUid: "invalid-guest",
+        password: "holly-cocoa-0123456789a",
+        createdAt: NOW,
+      });
+      batch.update(doc(database, "events/manchester"), { memberCount: 4 });
+      await assertFails(batch.commit());
+    }
+  });
+
+  it("prevents binding forgery, cross-event reuse, credential replacement and partial removal", async () => {
+    const joined = await joinWithEventPassword("manchester", "Guest");
+    const guest = apiSession.eventSessions.get("manchester")!.database;
+    const accessPath = `participantAccess/${joined.member.uid}`;
+    const credentialPath = `events/manchester/credentials/${joined.member.uid}`;
+    await assertFails(
+      updateDoc(doc(guest, accessPath), { memberUid: "alice" }),
+    );
+    await assertFails(
+      updateDoc(doc(admin, accessPath), { eventId: "sheffield" }),
+    );
+    await assertFails(
+      updateDoc(doc(guest, credentialPath), {
+        password: "different-password-123456",
+      }),
+    );
+    await assertFails(deleteDoc(doc(guest, credentialPath)));
+    await assertFails(deleteDoc(doc(guest, accessPath)));
+    await assertFails(getDoc(doc(guest, "events/sheffield/members/alice")));
+    const forged = writeBatch(guest);
+    forged.set(doc(guest, "participantAccess/another-guest"), {
+      eventId: "manchester",
+      memberUid: "alice",
+    });
+    forged.set(doc(guest, "events/manchester/credentials/alice"), {
+      authUid: "another-guest",
+      password: joined.password,
+      createdAt: NOW,
+    });
+    await assertFails(forged.commit());
+    const reuse = writeBatch(guest);
+    reuse.set(
+      doc(guest, `events/sheffield/members/${joined.member.uid}`),
+      joined.member,
+    );
+    reuse.set(doc(guest, accessPath), {
+      eventId: "sheffield",
+      memberUid: joined.member.uid,
+    });
+    reuse.set(doc(guest, `events/sheffield/credentials/${joined.member.uid}`), {
+      authUid: joined.member.uid,
+      password: joined.password,
+      createdAt: NOW,
+    });
+    reuse.update(doc(guest, "events/sheffield"), { memberCount: 4 });
+    await assertFails(reuse.commit());
+    const partialRemoval = writeBatch(guest);
+    partialRemoval.delete(
+      doc(guest, `events/manchester/members/${joined.member.uid}`),
+    );
+    partialRemoval.update(doc(guest, "events/manchester"), { memberCount: 3 });
+    await assertFails(partialRemoval.commit());
+  });
+
+  it("lets guest participants update hints after the draw while keeping names and assignments fixed", async () => {
+    const joined = await joinWithEventPassword("manchester", "Guest", "Books");
+    await updateParticipant("manchester", "Guest B.", "Tea");
+    await runDraw("manchester");
+    const recipient = await getParticipantRecipient("manchester");
+    expect(recipient?.giverUid).toBe(joined.member.uid);
+    await updateParticipantPreferences("manchester", "  Decaf tea  ");
+    expect((await getParticipantMembership("manchester"))?.preferences).toBe(
+      "Decaf tea",
+    );
+    await expect(
+      updateParticipant("manchester", "Another name", "Books"),
+    ).rejects.toThrow("closed");
+    await expect(leaveParticipant("manchester")).rejects.toThrow("closed");
+    expect(await getParticipantRecipient("manchester")).toEqual(recipient);
+    await updateDoc(doc(admin, "events/manchester"), { status: "archived" });
+    await expect(
+      updateParticipantPreferences("manchester", "New hints"),
+    ).rejects.toThrow("archived");
+  });
+
+  it("discards a newly-created account only when registration is known not to have committed", async () => {
+    apiSession.afterAccountCreated = async () => {
+      await updateDoc(doc(admin, "events/manchester"), { status: "locked" });
+    };
+    await expect(joinWithEventPassword("manchester", "Guest")).rejects.toThrow(
+      "closed",
+    );
+    expect(apiSession.discarded).toEqual(["guest-1"]);
+    expect(
+      (await getDoc(doc(admin, "participantAccess/guest-1"))).exists(),
+    ).toBe(false);
+    expect(
+      (await getDoc(doc(admin, "events/manchester"))).data()?.memberCount,
+    ).toBe(3);
+  });
+
+  it("recovers a committed registration when the commit acknowledgement is lost", async () => {
+    apiSession.throwAfterCommit = true;
+    const joined = await joinWithEventPassword("manchester", "Guest");
+    expect(await getParticipantMembership("manchester")).toEqual(joined.member);
+    expect(await getParticipantPassword("manchester")).toBe(joined.password);
+    expect(apiSession.discarded).toEqual([]);
+    expect(
+      (await getDoc(doc(admin, "events/manchester"))).data()?.memberCount,
+    ).toBe(4);
+  });
+
+  it("retains an uncertain account and retries without creating a duplicate participant", async () => {
+    apiSession.throwAfterCommit = true;
+    apiSession.blockServerReads = true;
+    await expect(joinWithEventPassword("manchester", "Guest")).rejects.toThrow(
+      "could not be confirmed",
+    );
+    expect(apiSession.discarded).toEqual([]);
+    apiSession.blockServerReads = false;
+    const retried = await joinWithEventPassword("manchester", "Guest");
+    expect(retried.member.uid).toBe("guest-1");
+    expect(apiSession.accountCounter).toBe(1);
+    expect(
+      (await getDoc(doc(admin, "events/manchester"))).data()?.memberCount,
+    ).toBe(4);
+  });
+
+  it("does not delete an uncertain account merely because server reads currently show no registration", async () => {
+    apiSession.uncertainCommitWithoutWrite = true;
+    await expect(joinWithEventPassword("manchester", "Guest")).rejects.toThrow(
+      "could not be confirmed",
+    );
+    expect(
+      (await getDoc(doc(admin, "events/manchester/members/guest-1"))).exists(),
+    ).toBe(false);
+    expect(apiSession.discarded).toEqual([]);
+    const retried = await joinWithEventPassword("manchester", "Guest");
+    expect(retried.member.uid).toBe("guest-1");
+    expect(apiSession.accountCounter).toBe(1);
+    expect(
+      (await getDoc(doc(admin, "events/manchester"))).data()?.memberCount,
+    ).toBe(4);
   });
 
   it("publishes 100 participants across bounded batches within rule access limits", async () => {

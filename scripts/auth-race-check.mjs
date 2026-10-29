@@ -19,6 +19,7 @@ page.on("pageerror", (error) => errors.push(error.message));
 await context.addInitScript(() => {
   const state = {
     observers: new Set(),
+    eventObservers: new Set(),
     rolesHeld: new Set(),
     roleWaiters: new Map(),
     membershipsHeld: new Set(),
@@ -26,6 +27,11 @@ await context.addInitScript(() => {
     reloadHeld: false,
     reloadWaiter: null,
     eventsListener: null,
+    joinAllowed: false,
+    joinMember: null,
+    joinWaiter: null,
+    joinNumber: 0,
+    joinCalls: [],
   };
   const makeUser = (uid, verified = true) => ({
     uid,
@@ -44,10 +50,55 @@ await context.addInitScript(() => {
     },
   });
   state.auth = { currentUser: makeUser("alice") };
+  state.eventAuth = { currentUser: null };
   state.makeUser = makeUser;
   state.emit = (user) => {
     state.auth.currentUser = user;
     for (const callback of state.observers) void callback(user);
+  };
+  state.emitEvent = (user) => {
+    state.eventAuth.currentUser = user;
+    for (const callback of state.eventObservers) void callback(user);
+  };
+  state.setHidden = (hidden) => {
+    Object.defineProperty(document, "hidden", {
+      configurable: true,
+      get: () => hidden,
+    });
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      get: () => (hidden ? "hidden" : "visible"),
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+  };
+  state.prepareJoin = () => {
+    state.joinAllowed = true;
+    state.joinMember = null;
+    state.joinWaiter = null;
+    state.joinNumber += 1;
+    state.joinCalls = [];
+    state.emitEvent(null);
+    state.setHidden(false);
+    state.events = state.events.map((event) => ({
+      ...event,
+      status: "open",
+      signupDeadline: Date.now() + 86_400_000,
+      exchangeAt: Date.now() + 172_800_000,
+      activeRunId: null,
+    }));
+    state.eventsListener([...state.events]);
+  };
+  state.resolveJoin = () => {
+    if (!state.joinWaiter) throw new Error("No pending mock join");
+    const { name, preferences, resolve } = state.joinWaiter;
+    const uid = `joined-${state.joinNumber}`;
+    state.joinMember = { uid, name, preferences, joinedAt: 1 };
+    state.emitEvent(makeUser(uid, false));
+    state.joinWaiter = null;
+    resolve({
+      member: structuredClone(state.joinMember),
+      password: "mock-holly-candle-password",
+    });
   };
   state.switchUser = (uid, { verified = true, holdRole = false } = {}) => {
     if (holdRole) state.rolesHeld.add(uid);
@@ -95,7 +146,10 @@ await context.addInitScript(() => {
 await page.route(/\/src\/lib\/firebase\.ts(?:\?|$)/, (route) =>
   route.fulfill({
     contentType: "application/javascript",
-    body: "export const auth = window.__authRace.auth; export const db = {}; export const emulatorMode = true;",
+    body: `export const auth = window.__authRace.auth;
+      export const db = {};
+      export const emulatorMode = true;
+      export function getEventServices() { return { auth: window.__authRace.eventAuth, db: {} }; }`,
   }),
 );
 await page.route(
@@ -106,6 +160,11 @@ await page.route(
       body: `
     export function onIdTokenChanged(auth, callback) {
       const state = window.__authRace;
+      if (auth !== state.auth) {
+        state.eventObservers.add(callback);
+        queueMicrotask(() => { if (state.eventObservers.has(callback)) void callback(auth.currentUser); });
+        return () => state.eventObservers.delete(callback);
+      }
       state.observers.add(callback);
       queueMicrotask(() => { if (state.observers.has(callback)) void callback(auth.currentUser); });
       return () => state.observers.delete(callback);
@@ -142,6 +201,28 @@ await page.route(/\/src\/lib\/api\.ts(?:\?|$)/, (route) =>
     export async function getRecipient(eventId, uid) {
       return { ...await getAssignment(eventId, uid), preferences: 'Preferences for ' + uid };
     }
+    export async function getParticipantRecipient(eventId) {
+      if (!state.auth.currentUser) throw new Error('Recipient requested without an account');
+      return getRecipient(eventId, state.auth.currentUser.uid);
+    }
+    export async function getParticipantMembership(eventId) {
+      if (!state.joinAllowed || eventId !== 'gathering') throw new Error('Unexpected event account membership request');
+      if (state.joinMember?.uid !== state.eventAuth.currentUser?.uid) throw new Error('Wrong event account');
+      return structuredClone(state.joinMember);
+    }
+    export async function getParticipantPassword() { return null; }
+    export async function getMemberPassword() { throw new Error('Unexpected organiser password request'); }
+    export async function issueParticipantPassword() { throw new Error('Unexpected mutation'); }
+    export async function joinWithEventPassword(eventId, name, preferences) {
+      if (!state.joinAllowed || eventId !== 'gathering' || state.joinWaiter || state.joinMember) throw new Error('Unexpected mutation');
+      state.joinCalls.push([eventId, name, preferences]);
+      return new Promise(resolve => { state.joinWaiter = { name, preferences, resolve }; });
+    }
+    export async function leaveParticipant() { throw new Error('Unexpected mutation'); }
+    export async function signInParticipant() { throw new Error('Unexpected sign-in'); }
+    export async function signOutParticipant() { throw new Error('Unexpected sign-out'); }
+    export async function updateParticipant() { throw new Error('Unexpected mutation'); }
+    export async function updateParticipantPreferences() { throw new Error('Unexpected mutation'); }
     export async function getMembers() { return []; }
     export async function joinEvent() { throw new Error('Unexpected mutation'); }
     export async function updatePreferences() { throw new Error('Unexpected mutation'); }
@@ -226,7 +307,10 @@ try {
     window.__authRace.switchUser("new-user", { verified: false }),
   );
   await page
-    .getByRole("link", { name: "Verify my email", exact: true })
+    .getByRole("link", {
+      name: "Previously joined with email? Sign in here",
+      exact: true,
+    })
     .click();
   await page
     .getByRole("button", { name: "Check verification", exact: true })
@@ -248,7 +332,7 @@ try {
     state.switchUser(null);
     state.reloadWaiter.resolve();
   });
-  await page.getByRole("heading", { name: "Sign in" }).waitFor();
+  await page.getByRole("heading", { name: "Email sign in" }).waitFor();
   assert.equal(
     await page.getByText("pending-user@example.test", { exact: true }).count(),
     0,
@@ -257,9 +341,64 @@ try {
     await page.getByRole("button", { name: "Sign out", exact: true }).count(),
     0,
   );
+
+  // The join response is deliberately held across visibility changes. Concealment
+  // must survive both completion in the background and completion after returning.
+  for (const timing of ["hidden", "returned", "visible"]) {
+    await page.evaluate(() => { location.hash = "/"; });
+    await page.locator(".event-page").waitFor({ state: "detached" });
+    await page.evaluate(() => {
+      window.__authRace.prepareJoin();
+      location.hash = "/events/gathering";
+    });
+    await page.getByLabel("Your name", { exact: true }).fill("Jordan Smith");
+    await page
+      .locator("form")
+      .getByRole("button", { name: "Join event", exact: true })
+      .click();
+    await page.waitForFunction(() => window.__authRace.joinWaiter !== null);
+    assert.deepEqual(
+      await page.evaluate(() => window.__authRace.joinCalls),
+      [["gathering", "Jordan Smith", ""]],
+      "The pending join receives the submitted name and optional blank hint",
+    );
+
+    if (timing !== "visible")
+      await page.evaluate(() => window.__authRace.setHidden(true));
+    if (timing === "returned")
+      await page.evaluate(() => window.__authRace.setHidden(false));
+    await page.evaluate(() => window.__authRace.resolveJoin());
+    await page.getByText("You’re registered.", { exact: true }).waitFor();
+    await page
+      .getByRole("button", { name: "Save changes", exact: true })
+      .waitFor();
+
+    if (timing === "visible") {
+      assert.equal(
+        await page.getByTestId("event-password").textContent(),
+        "mock-holly-candle-password",
+        "A normal visible signup still displays the participant’s password",
+      );
+    } else {
+      assert.equal(
+        await page.getByTestId("event-password").count(),
+        0,
+        `A join completing ${timing === "hidden" ? "while hidden" : "after returning"} cannot restore a concealed password`,
+      );
+      await page.evaluate(() => window.__authRace.setHidden(false));
+      await page
+        .getByRole("button", { name: "Show my password", exact: true })
+        .waitFor();
+      assert.equal(
+        await page.getByText("mock-holly-candle-password", { exact: true }).count(),
+        0,
+        "Returning to the page does not reveal the completed signup receipt",
+      );
+    }
+  }
   assert.deepEqual(errors, [], "No uncaught browser errors");
   console.log(
-    "Auth race checks passed: immediate concealment, late membership/role isolation, same-UID privacy reset, verification refresh, and refresh-after-sign-out. No Firebase data touched.",
+    "Auth race checks passed: immediate concealment, late membership/role isolation, same-UID privacy reset, verification refresh, refresh-after-sign-out, and pending signup concealment during/after hidden tabs with a visible-signup control. No Firebase data touched.",
   );
 } finally {
   await browser.close();

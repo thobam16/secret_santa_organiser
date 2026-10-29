@@ -43,6 +43,8 @@ await context.addInitScript(() => {
     eventObservers: new Set(),
     calls: saved?.calls || [],
     member: saved?.member || null,
+    isAdmin: false,
+    roster: [],
     recipientPreferences:
       saved?.recipientPreferences ??
       "History books and dark chocolate.\nPlease avoid anything with nuts.",
@@ -79,6 +81,7 @@ await context.addInitScript(() => {
       },
     },
   };
+  state.eventAuth = { currentUser: null };
   state.persist = () =>
     sessionStorage.setItem(
       key,
@@ -116,7 +119,10 @@ await context.addInitScript(() => {
 await page.route(/\/src\/lib\/firebase\.ts(?:\?|$)/, (route) =>
   route.fulfill({
     contentType: "application/javascript",
-    body: "export const auth = window.__preferencesTest.auth; export const db = {}; export const emulatorMode = true;",
+    body: `export const auth = window.__preferencesTest.auth;
+      export const db = {};
+      export const emulatorMode = true;
+      export function getEventServices() { return { auth: window.__preferencesTest.eventAuth, db: {} }; }`,
   }),
 );
 await page.route(
@@ -127,6 +133,11 @@ await page.route(
       body: `
     export function onIdTokenChanged(auth, callback) {
       const state = window.__preferencesTest;
+      if (auth !== state.auth) {
+        let active = true;
+        queueMicrotask(() => { if (active) void callback(null); });
+        return () => { active = false; };
+      }
       state.observers.add(callback);
       queueMicrotask(() => { if (state.observers.has(callback)) void callback(auth.currentUser); });
       return () => state.observers.delete(callback);
@@ -151,39 +162,69 @@ await page.route(/\/src\/lib\/api\.ts(?:\?|$)/, (route) =>
       queueMicrotask(() => { if (state.eventObservers.has(next)) next(structuredClone(state.events)); });
       return () => state.eventObservers.delete(next);
     }
-    export async function getIsAdmin(uid) { assert(uid === 'alice', 'wrong account'); return false; }
+    export async function getIsAdmin(uid) { assert(uid === 'alice', 'wrong account'); return state.isAdmin; }
     export async function getMyMemberships(uid, ids) {
       assert(uid === 'alice', 'membership requested for wrong user');
       assert(Array.isArray(ids) && ids.every(id => id === 'gathering'), 'unexpected membership event');
       return state.member ? { gathering: structuredClone(state.member) } : {};
     }
-    export async function joinEvent(eventId, name, preferences = '') {
+    function saveMember(eventId, name, preferences, method) {
       assert(eventId === 'gathering', 'wrong join event');
       assert(state.events[0].status === 'open' && state.events[0].signupDeadline > Date.now(), 'name/join changes after signup closed');
       assert(typeof name === 'string' && name.trim().length > 0, 'missing name');
       checkPreferences(preferences);
-      state.record('joinEvent', [eventId, name, preferences]);
+      state.record(method, [eventId, name, preferences]);
       if (!state.member) state.events[0].memberCount++;
       state.member = { uid: 'alice', name: name.trim(), preferences: preferences.trim(), joinedAt: state.member?.joinedAt || 1 };
       state.emitEvents();
     }
-    export async function updatePreferences(eventId, preferences) {
+    export async function joinWithEventPassword(eventId, name, preferences = '') {
+      assert(!state.member, 'join must not overwrite an existing membership');
+      saveMember(eventId, name, preferences, 'joinWithEventPassword');
+      return { member: structuredClone(state.member), password: 'mock-holly-candle-snow' };
+    }
+    export async function updateParticipant(eventId, name, preferences = '') {
+      assert(!!state.member, 'profile updates require membership');
+      saveMember(eventId, name, preferences, 'updateParticipant');
+    }
+    export async function updateParticipantPreferences(eventId, preferences) {
       assert(eventId === 'gathering', 'wrong preferences event');
       assert(!!state.member, 'preferences require membership');
       assert(state.events[0].status !== 'archived', 'archived preferences are immutable');
       checkPreferences(preferences);
-      state.record('updatePreferences', [eventId, preferences]);
+      state.record('updateParticipantPreferences', [eventId, preferences]);
       state.member = { ...state.member, preferences: preferences.trim() };
       state.persist();
     }
-    export async function getRecipient(eventId, uid) {
+    export async function getParticipantRecipient(eventId) {
+      const uid = state.auth.currentUser?.uid;
       assert(eventId === 'gathering' && uid === 'alice', 'wrong recipient request');
       assert(['drawn', 'archived'].includes(state.events[0].status), 'recipient requested before publication');
-      state.record('getRecipient', [eventId, uid]);
+      state.record('getParticipantRecipient', [eventId]);
       return { giverUid: uid, recipientUid: 'taylor', recipientName: 'Taylor Reed', preferences: state.recipientPreferences };
     }
-    export async function getAssignment() { throw new Error('Participant UI must use getRecipient'); }
-    export async function getMembers() { throw new Error('Participant must not fetch the roster'); }
+    export async function getParticipantMembership() { throw new Error('Unexpected event account membership request'); }
+    export async function getParticipantPassword() { return null; }
+    export async function getMemberPassword(...args) {
+      state.record('getMemberPassword', args);
+      throw new Error('Preferences must not fetch passwords');
+    }
+    export async function issueParticipantPassword() { throw new Error('Unexpected password issuance'); }
+    export async function leaveParticipant() { throw new Error('Unexpected removal'); }
+    export async function signInParticipant() { throw new Error('Unexpected sign-in'); }
+    export async function signOutParticipant() { throw new Error('Unexpected sign-out'); }
+    export async function joinEvent() { throw new Error('Participant UI must use joinWithEventPassword'); }
+    export async function updatePreferences() { throw new Error('Participant UI must use updateParticipantPreferences'); }
+    export async function getRecipient() { throw new Error('Participant UI must use getParticipantRecipient'); }
+    export async function getAssignment(...args) {
+      state.record('getAssignment', args);
+      throw new Error('Preferences must not fetch pairings');
+    }
+    export async function getMembers(eventId) {
+      assert(state.isAdmin && eventId === 'gathering', 'roster requires organiser access to this event');
+      state.record('getMembers', [eventId]);
+      return structuredClone(state.roster);
+    }
     export async function leaveEvent() { throw new Error('Unexpected removal'); }
     export async function saveEvent() { throw new Error('Unexpected event mutation'); }
     export async function setRegistration() { throw new Error('Unexpected registration mutation'); }
@@ -210,17 +251,36 @@ const latestCall = (method) =>
     method,
   );
 const saved = () => page.getByText("Saved.", { exact: true }).waitFor();
-const checkNoOverflow = async () =>
+const checkNoOverflow = async () => {
+  const overflow = await page.evaluate(() => ({
+    viewport: window.innerWidth,
+    page: document.documentElement.scrollWidth,
+    elements: [...document.querySelectorAll(
+      ".admin-layout, .admin-sidebar, .admin-main, .page-heading, .countdown-grid, .panel, .tabs, .table-scroll, .participant-table",
+    )]
+      .map((element) => ({
+        className: element.className,
+        right: Math.round(element.getBoundingClientRect().right),
+        width: element.clientWidth,
+        scrollWidth: element.scrollWidth,
+        overflow: getComputedStyle(element).overflow,
+      }))
+      .filter((element) =>
+        element.right > window.innerWidth + 1 || element.className === "table-scroll",
+      ),
+  }));
   assert.ok(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth <= window.innerWidth + 1,
-    ),
-    "No horizontal viewport overflow",
+    overflow.page <= overflow.viewport + 1,
+    `No horizontal viewport overflow: ${JSON.stringify(overflow)}`,
   );
+};
 
 try {
   await page.goto(`${base}/#/events/gathering`);
-  await page.getByRole("button", { name: "Join event", exact: true }).waitFor();
+  await page
+    .locator("form")
+    .getByRole("button", { name: "Join event", exact: true })
+    .waitFor();
   assert.equal(await preferences().getAttribute("maxlength"), "500");
   assert.equal(
     await preferences().getAttribute("placeholder"),
@@ -234,12 +294,15 @@ try {
 
   // An empty optional value must not prevent joining or invent a preference.
   await page.getByLabel("Your name", { exact: true }).fill("Alex Morgan");
-  await page.getByRole("button", { name: "Join event", exact: true }).click();
+  await page
+    .locator("form")
+    .getByRole("button", { name: "Join event", exact: true })
+    .click();
   await page
     .getByRole("heading", { name: "You’re registered", exact: true })
     .waitFor();
-  assert.deepEqual(await latestCall("joinEvent"), {
-    method: "joinEvent",
+  assert.deepEqual(await latestCall("joinWithEventPassword"), {
+    method: "joinWithEventPassword",
     args: ["gathering", "Alex Morgan", ""],
   });
 
@@ -251,8 +314,8 @@ try {
   await preferences().fill(ownHints);
   await page.getByRole("button", { name: "Save changes", exact: true }).click();
   await saved();
-  assert.deepEqual(await latestCall("joinEvent"), {
-    method: "joinEvent",
+  assert.deepEqual(await latestCall("updateParticipant"), {
+    method: "updateParticipant",
     args: ["gathering", "Alex Morgan Updated", ownHints],
   });
   await page.reload();
@@ -271,7 +334,7 @@ try {
   assert.equal((await preferences().inputValue()).length, 500);
   await page.getByRole("button", { name: "Save changes", exact: true }).click();
   await saved();
-  assert.equal((await latestCall("joinEvent")).args[2].length, 500);
+  assert.equal((await latestCall("updateParticipant")).args[2].length, 500);
 
   // Closing signup, including expiry without a state transition, freezes names
   // but retains preference edits. Drawing and publication do not change that.
@@ -294,8 +357,8 @@ try {
       .getByRole("button", { name: "Save preferences", exact: true })
       .click();
     await saved();
-    assert.deepEqual(await latestCall("updatePreferences"), {
-      method: "updatePreferences",
+    assert.deepEqual(await latestCall("updateParticipantPreferences"), {
+      method: "updateParticipantPreferences",
       args: ["gathering", value],
     });
     assert.equal(
@@ -307,7 +370,7 @@ try {
     await page.evaluate(
       () =>
         window.__preferencesTest.calls.filter(
-          (call) => call.method === "getRecipient",
+          (call) => call.method === "getParticipantRecipient",
         ).length,
     ),
     0,
@@ -327,9 +390,9 @@ try {
       recipientHints,
     ),
   );
-  assert.deepEqual(await latestCall("getRecipient"), {
-    method: "getRecipient",
-    args: ["gathering", "alice"],
+  assert.deepEqual(await latestCall("getParticipantRecipient"), {
+    method: "getParticipantRecipient",
+    args: ["gathering"],
   });
   assert.equal(
     await page
@@ -378,8 +441,8 @@ try {
     .getByRole("button", { name: "Save preferences", exact: true })
     .click();
   await saved();
-  assert.deepEqual(await latestCall("updatePreferences"), {
-    method: "updatePreferences",
+  assert.deepEqual(await latestCall("updateParticipantPreferences"), {
+    method: "updateParticipantPreferences",
     args: ["gathering", ""],
   });
   await page.reload();
@@ -456,6 +519,101 @@ try {
     fullPage: true,
   });
 
+  // The organiser can inspect each participant's hints without fetching either
+  // recoverable passwords or recipient assignments.
+  await page.evaluate((recipientHints) => {
+    const state = window.__preferencesTest;
+    state.isAdmin = true;
+    state.roster = [
+      structuredClone(state.member),
+      {
+        uid: "taylor",
+        name: "Taylor Reed",
+        preferences: recipientHints,
+        joinedAt: 1,
+      },
+      { uid: "sam", name: "Sam Ellis", joinedAt: 1 },
+    ];
+    state.events[0].memberCount = state.roster.length;
+    state.emitEvents();
+    for (const callback of state.observers) void callback(state.auth.currentUser);
+    location.hash = "/admin/gathering";
+  }, recipientHints);
+  await page.locator(".participant-table").waitFor();
+  assert.equal(await page.locator(".participant-preferences").count(), 3);
+  const organiserHints = page.getByTestId("participant-preferences-alice");
+  const emptyHints = page.getByTestId("participant-preferences-sam");
+  assert.equal(await organiserHints.locator("p").isVisible(), false);
+  await organiserHints.locator("summary").click();
+  await organiserHints.locator("p").waitFor();
+  assert.equal(await organiserHints.locator("p").textContent(), ownHints);
+  assert.match(
+    await organiserHints.locator("p").evaluate(
+      (element) => getComputedStyle(element).whiteSpace,
+    ),
+    /pre-wrap|pre-line|break-spaces/,
+    "The organiser sees the participant's original line breaks",
+  );
+  await emptyHints.locator("summary").click();
+  await emptyHints
+    .getByText("No preferences provided.", { exact: true })
+    .waitFor();
+  await page
+    .getByTestId("participant-preferences-taylor")
+    .locator("summary")
+    .click();
+  await checkNoOverflow();
+  await page.screenshot({
+    path: "artifacts/organiser-preferences-desktop.png",
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await checkNoOverflow();
+  assert.ok(
+    await organiserHints.locator("p").evaluate(
+      (element) => element.scrollWidth <= element.clientWidth + 1,
+    ),
+    "Organiser preferences fit within the mobile participant cell",
+  );
+  await page.screenshot({
+    path: "artifacts/organiser-preferences-mobile.png",
+    fullPage: true,
+  });
+
+  // Long unbroken hints also remain contained, without changing table columns.
+  await page.evaluate(() => {
+    window.__preferencesTest.roster[0].preferences = "x".repeat(500);
+    location.hash = "/";
+  });
+  await page.locator(".participant-table").waitFor({ state: "detached" });
+  await page.evaluate(() => { location.hash = "/admin/gathering"; });
+  await organiserHints.locator("summary").click();
+  assert.equal((await organiserHints.locator("p").textContent()).length, 500);
+  await checkNoOverflow();
+  assert.ok(
+    await organiserHints.locator("p").evaluate(
+      (element) => element.scrollWidth <= element.clientWidth + 1,
+    ),
+    "Long organiser hints wrap without widening the roster",
+  );
+  await organiserHints.locator("summary").click();
+  assert.equal(await organiserHints.locator("p").isVisible(), false);
+  assert.equal(
+    await page
+      .locator('[data-testid^="password-"], [data-testid^="pairing-"]')
+      .count(),
+    0,
+    "Passwords and recipient pairings remain hidden",
+  );
+  assert.deepEqual(
+    await page.evaluate(() => window.__preferencesTest.calls.filter(
+      (call) => ["getMemberPassword", "getAssignment"].includes(call.method),
+    )),
+    [],
+    "Viewing gift preferences never requests passwords or pairings",
+  );
+  assert.equal(await page.locator(".notice.error").count(), 0);
+
   assert.deepEqual(
     unexpectedRequests,
     [],
@@ -463,7 +621,7 @@ try {
   );
   assert.deepEqual(errors, [], "No uncaught browser errors");
   console.log(
-    "Preference checks passed: optional blank join, saved reloads, 500-character limit, edits after signup and draw, reveal/hide privacy, empty hints, archived read-only, and responsive multiline/long text. No Firebase data touched.",
+    "Preference checks passed: optional blank join, saved reloads, 500-character limit, edits after signup and draw, recipient reveal/hide, archived read-only, organiser expand/collapse with empty hints, and responsive multiline/long text without password or pairing reads. No Firebase data touched.",
   );
 } finally {
   await browser.close();

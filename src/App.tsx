@@ -12,6 +12,7 @@ import { auth, emulatorMode } from "./lib/firebase";
 import { getIsAdmin, getMyMemberships, subscribeEvents } from "./lib/api";
 import { SiteContext } from "./context";
 import { friendlyError, useRoute, Loading } from "./lib/ui";
+import { useParticipants } from "./lib/participants";
 import type { Member, SantaEvent } from "./types";
 import Snow from "./components/Snow";
 import FestiveDecor from "./components/FestiveDecor";
@@ -40,6 +41,9 @@ export default function App() {
   const [eventsLoading, setEventsLoading] = useState(true);
   const [eventsError, setEventsError] = useState("");
   const [memberships, setMemberships] = useState<Record<string, Member>>({});
+  const { participantSessions, reloadParticipant } = useParticipants(
+    events.map((event) => event.id),
+  );
   const [membershipsLoading, setMembershipsLoading] = useState(false);
   const [accountError, setAccountError] = useState("");
   const identitySequence = useRef(0);
@@ -176,14 +180,29 @@ export default function App() {
     });
   };
   const page = route.split("?")[0];
+  const combinedMemberships = { ...memberships };
+  for (const [eventId, session] of Object.entries(participantSessions)) {
+    if (session.userUid) {
+      delete combinedMemberships[eventId];
+      if (session.member) combinedMemberships[eventId] = session.member;
+    }
+  }
   const context = {
     ...identity,
     events,
     eventsLoading,
     eventsError,
-    memberships,
-    membershipsLoading,
+    memberships: combinedMemberships,
+    membershipsLoading:
+      membershipsLoading ||
+      events.some(
+        (event) =>
+          !participantSessions[event.id] ||
+          participantSessions[event.id].loading,
+      ),
     reloadMemberships,
+    participantSessions,
+    reloadParticipant,
     refreshIdentity,
   };
   let content;
@@ -244,14 +263,12 @@ export default function App() {
             <a className={`nav-link ${page === "/" ? "active" : ""}`} href="#/">
               Events
             </a>
-            {identity.user && (
-              <a
-                className={`nav-link ${page === "/my-events" ? "active" : ""}`}
-                href="#/my-events"
-              >
-                My events
-              </a>
-            )}
+            <a
+              className={`nav-link ${page === "/my-events" ? "active" : ""}`}
+              href="#/my-events"
+            >
+              My events
+            </a>
             {identity.isAdmin && (
               <a
                 className={`nav-link ${page.startsWith("/admin") ? "active" : ""}`}
@@ -281,8 +298,8 @@ export default function App() {
                   <span>Sign out</span>
                 </button>
               ) : (
-                <a className="button primary small" href="#/login">
-                  Sign in <ArrowUpRight size={16} />
+                <a className="button ghost small" href="#/login?next=%2Fadmin">
+                  Organiser <ArrowUpRight size={16} />
                 </a>
               ))}
           </div>

@@ -19,12 +19,60 @@ service cloud.firestore {
     function runPath(eventId, runId) {
       return /databases/$(database)/documents/events/$(eventId)/runs/$(runId);
     }
+    function accessPath(authUid) {
+      return /databases/$(database)/documents/participantAccess/$(authUid);
+    }
+    function credentialPath(eventId, memberUid) {
+      return /databases/$(database)/documents/events/$(eventId)/credentials/$(memberUid);
+    }
+    function guestAccount() {
+      return signedIn() && request.auth.token.firebase.sign_in_provider == 'password'
+        && request.auth.token.email.matches('^[0-9a-f]{64}@event[.]santa[.]invalid$');
+    }
+    function mappedOwner(eventId, memberUid) {
+      return guestAccount() && exists(accessPath(request.auth.uid))
+        && get(accessPath(request.auth.uid)).data.eventId == eventId
+        && get(accessPath(request.auth.uid)).data.memberUid == memberUid
+        && exists(memberPath(eventId, memberUid))
+        && exists(credentialPath(eventId, memberUid))
+        && get(credentialPath(eventId, memberUid)).data.authUid == request.auth.uid;
+    }
+    function ownsMember(eventId, memberUid) {
+      return (verified() && request.auth.uid == memberUid && exists(memberPath(eventId, memberUid)))
+        || mappedOwner(eventId, memberUid);
+    }
+    function participantUid(eventId) {
+      return verified() && exists(memberPath(eventId, request.auth.uid))
+        ? request.auth.uid : get(accessPath(request.auth.uid)).data.memberUid;
+    }
     function rosterOpen(eventId) {
       return get(eventPath(eventId)).data.status == 'open';
     }
     function canJoin(eventId) {
-      return verified() && rosterOpen(eventId)
+      return signedIn() && (verified() || guestAccount()) && rosterOpen(eventId)
         && request.time.toMillis() < get(eventPath(eventId)).data.signupDeadline;
+    }
+    function matchingAccessAfter(eventId, memberUid, authUid) {
+      return existsAfter(accessPath(authUid))
+        && getAfter(accessPath(authUid)).data.eventId == eventId
+        && getAfter(accessPath(authUid)).data.memberUid == memberUid
+        && existsAfter(memberPath(eventId, memberUid))
+        && existsAfter(credentialPath(eventId, memberUid))
+        && getAfter(credentialPath(eventId, memberUid)).data.authUid == authUid;
+    }
+    function canIssuePassword(eventId, memberUid) {
+      return exists(memberPath(eventId, memberUid))
+        && (isAdmin() || (verified() && request.auth.uid == memberUid));
+    }
+    function newGuestMember(eventId, memberUid, authUid) {
+      return guestAccount() && request.auth.uid == authUid && memberUid == authUid
+        && !exists(memberPath(eventId, memberUid)) && !exists(accessPath(authUid))
+        && canJoin(eventId) && matchingAccessAfter(eventId, memberUid, authUid);
+    }
+    function credentialsRemoved(eventId, memberUid) {
+      return !exists(credentialPath(eventId, memberUid))
+        || (!existsAfter(credentialPath(eventId, memberUid))
+          && !existsAfter(accessPath(get(credentialPath(eventId, memberUid)).data.authUid)));
     }
     function validEvent(d) {
       return d.keys().hasAll(['name', 'signupDeadline', 'exchangeAt', 'timezone', 'budget', 'details', 'guidelines', 'giftIdeas', 'status', 'memberCount', 'activeRunId', 'createdAt'])
@@ -47,7 +95,9 @@ service cloud.firestore {
       return canJoin(eventId)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberCount'])
         && ((!exists(path) && existsAfter(path) && request.resource.data.memberCount == resource.data.memberCount + 1)
-          || (exists(path) && !existsAfter(path) && request.resource.data.memberCount == resource.data.memberCount - 1));
+          || (ownsMember(eventId, participantUid(eventId))
+            && !existsAfter(memberPath(eventId, participantUid(eventId)))
+            && request.resource.data.memberCount == resource.data.memberCount - 1));
     }
     function adminEventUpdate(eventId) {
       let changed = request.resource.data.diff(resource.data).affectedKeys();
@@ -77,7 +127,8 @@ service cloud.firestore {
     function isAssignedGiver(eventId, recipientUid) {
       let event = get(eventPath(eventId)).data;
       return event.status in ['drawn', 'archived'] && event.activeRunId is string
-        && get(/databases/$(database)/documents/events/$(eventId)/runs/$(event.activeRunId)/assignments/$(request.auth.uid)).data.recipientUid == recipientUid;
+        && ownsMember(eventId, participantUid(eventId))
+        && get(/databases/$(database)/documents/events/$(eventId)/runs/$(event.activeRunId)/assignments/$(participantUid(eventId))).data.recipientUid == recipientUid;
     }
     function preferencesEditable(eventId) {
       return get(eventPath(eventId)).data.status in ['open', 'locked', 'drawing', 'drawn']
@@ -90,32 +141,76 @@ service cloud.firestore {
       allow list, write: if false;
     }
 
+    // Access records map event-password accounts to immutable participant IDs.
+    // Existing members and published assignments keep their original IDs.
+    match /participantAccess/{authUid} {
+      allow get: if signedIn() && (request.auth.uid == authUid || isAdmin());
+      allow list, update: if false;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasAll(['eventId', 'memberUid'])
+        && request.resource.data.keys().hasOnly(['eventId', 'memberUid'])
+        && request.resource.data.eventId is string && request.resource.data.eventId.matches('^[^/]{1,128}$')
+        && request.resource.data.memberUid is string && request.resource.data.memberUid.matches('^[^/]{1,128}$')
+        && !exists(credentialPath(request.resource.data.eventId, request.resource.data.memberUid))
+        && matchingAccessAfter(request.resource.data.eventId, request.resource.data.memberUid, authUid)
+        && (canIssuePassword(request.resource.data.eventId, request.resource.data.memberUid)
+          || newGuestMember(request.resource.data.eventId, request.resource.data.memberUid, authUid));
+      allow delete: if signedIn()
+        && (isAdmin() || ownsMember(resource.data.eventId, resource.data.memberUid))
+        && !existsAfter(memberPath(resource.data.eventId, resource.data.memberUid))
+        && !existsAfter(credentialPath(resource.data.eventId, resource.data.memberUid));
+    }
+
     match /events/{eventId} {
       allow read: if true;
       allow create: if isAdmin() && validEvent(request.resource.data)
         && request.resource.data.status == 'open'
         && request.resource.data.memberCount == 0 && request.resource.data.activeRunId == null;
       allow update: if validEvent(request.resource.data)
-        && ((verified() && ownCountChange(eventId)) || adminEventUpdate(eventId));
+        && ((signedIn() && ownCountChange(eventId)) || adminEventUpdate(eventId));
       allow delete: if false;
 
       match /members/{uid} {
-        allow get: if signedIn() && (request.auth.uid == uid || isAdmin() || isAssignedGiver(eventId, uid));
+        allow get: if signedIn() && ((verified() && request.auth.uid == uid)
+          || (guestAccount() && request.auth.uid == uid && !exists(memberPath(eventId, uid)))
+          || mappedOwner(eventId, uid) || isAdmin() || isAssignedGiver(eventId, uid));
         allow list: if isAdmin();
         allow create: if canJoin(eventId) && request.auth.uid == uid
+          && (verified() || newGuestMember(eventId, uid, request.auth.uid))
           && validMember(request.resource.data, uid)
           && getAfter(eventPath(eventId)).data.memberCount == get(eventPath(eventId)).data.memberCount + 1
           && getAfter(eventPath(eventId)).data.status == 'open';
-        allow update: if verified() && request.auth.uid == uid
+        allow update: if ownsMember(eventId, uid)
           && validMember(request.resource.data, uid)
           && ((canJoin(eventId)
               && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'preferences'])
               && getAfter(eventPath(eventId)).data.status == 'open')
             || (preferencesEditable(eventId)
               && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['preferences'])));
-        allow delete: if ((canJoin(eventId) && request.auth.uid == uid) || (isAdmin() && rosterOpen(eventId)))
+        allow delete: if ((canJoin(eventId) && ownsMember(eventId, uid)) || (isAdmin() && rosterOpen(eventId)))
           && getAfter(eventPath(eventId)).data.memberCount == get(eventPath(eventId)).data.memberCount - 1
-          && getAfter(eventPath(eventId)).data.status == 'open';
+          && getAfter(eventPath(eventId)).data.status == 'open'
+          && credentialsRemoved(eventId, uid);
+      }
+
+      // Recoverable passwords never appear in the member records read by givers.
+      match /credentials/{memberUid} {
+        allow get: if isAdmin() || ownsMember(eventId, memberUid);
+        allow list, update: if false;
+        allow create: if signedIn()
+          && request.resource.data.keys().hasAll(['authUid', 'password', 'createdAt'])
+          && request.resource.data.keys().hasOnly(['authUid', 'password', 'createdAt'])
+          && request.resource.data.authUid is string && request.resource.data.authUid.matches('^[^/]{1,128}$')
+          && request.resource.data.password is string && request.resource.data.password.size() >= 16
+          && request.resource.data.password.size() <= 128
+          && request.resource.data.createdAt is int && request.resource.data.createdAt > 0
+          && !exists(accessPath(request.resource.data.authUid))
+          && matchingAccessAfter(eventId, memberUid, request.resource.data.authUid)
+          && (canIssuePassword(eventId, memberUid)
+            || newGuestMember(eventId, memberUid, request.resource.data.authUid));
+        allow delete: if (isAdmin() || ownsMember(eventId, memberUid))
+          && !existsAfter(memberPath(eventId, memberUid))
+          && !existsAfter(accessPath(resource.data.authUid));
       }
 
       match /runs/{runId} {
@@ -150,7 +245,7 @@ service cloud.firestore {
               && d.recipientUid == plan.recipients[uid]
               && d.recipientName == plan.members[d.recipientUid];
           }
-          allow get: if isAdmin() || (signedIn() && request.auth.uid == uid && published());
+          allow get: if isAdmin() || (ownsMember(eventId, uid) && published());
           allow list: if isAdmin();
           allow create: if isAdmin() && get(eventPath(eventId)).data.status == 'drawing'
             && get(eventPath(eventId)).data.activeRunId == runId && plannedAssignment();

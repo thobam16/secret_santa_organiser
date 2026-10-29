@@ -98,6 +98,37 @@ a:focus:not(:focus-visible) {
   display: none !important;
 }
 
+.event-password-card {
+  margin-block: 22px;
+  padding: 16px;
+  border: 1px solid #dbc78f;
+  border-radius: 8px;
+  background: #fbf3dd;
+}
+.event-password-card h3 {
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+.event-password-card .form-actions {
+  margin-top: 12px;
+}
+.event-password-value {
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, monospace;
+  font-size: 17px;
+  font-weight: 600;
+  color: #8d2636;
+  user-select: all;
+}
+.event-session-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  margin-top: 20px;
+}
+
 .app-shell {
   position: relative;
   z-index: 1;
@@ -2937,4 +2968,77 @@ body {
   .site-header {
     border-bottom-color: #d3af6159;
   }
+}
+
+.participant-table.with-passwords {
+  min-width: 540px;
+  table-layout: fixed;
+}
+.participant-table.with-passwords th:first-child {
+  width: 29%;
+}
+.participant-table.with-passwords th:nth-child(2) {
+  width: 38%;
+}
+.participant-table.with-passwords th:last-child {
+  width: 43px;
+}
+.participant-password {
+  display: grid;
+  gap: 8px;
+}
+.participant-password-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+.participant-password-control .icon-button {
+  flex-shrink: 0;
+}
+.participant-password .field-help {
+  margin: 0;
+}
+.participant-password > .button {
+  width: fit-content;
+}
+.event-password-value {
+  color: var(--green-dark);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.password-error {
+  color: var(--red);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.admin-main .table-scroll {
+  /* Keep the scrolling roster contained at the site's UI zoom. */
+  contain: paint;
+}
+.participant-preferences {
+  margin-top: 4px;
+  min-width: 0;
+}
+.participant-preferences summary {
+  width: fit-content;
+  padding-block: 7px;
+  color: var(--green-dark);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.participant-preferences summary:hover {
+  text-decoration: underline;
+}
+.participant-preferences p {
+  margin: 2px 0 0;
+  color: #5e7054;
+  font-size: 12px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
 }

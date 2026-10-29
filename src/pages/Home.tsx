@@ -18,7 +18,6 @@ export default function Home({ onlyMine }: { onlyMine: boolean }) {
     eventsError,
     memberships,
     membershipsLoading,
-    user,
     isAdmin,
   } = useSite();
   const shown = events.filter((event) =>
@@ -54,13 +53,6 @@ export default function Home({ onlyMine }: { onlyMine: boolean }) {
               Try again
             </button>
           </div>
-        ) : onlyMine && !user ? (
-          <div className="empty-state">
-            <p>Sign in to view your events.</p>
-            <a className="button primary" href="#/login">
-              Sign in <ArrowRight size={16} />
-            </a>
-          </div>
         ) : !shown.length ? (
           <div className="empty-state">
             <p>
@@ -76,7 +68,7 @@ export default function Home({ onlyMine }: { onlyMine: boolean }) {
             ) : (
               onlyMine && (
                 <a className="button secondary" href="#/">
-                  View events <ArrowRight size={17} />
+                  Join or sign in to an event <ArrowRight size={17} />
                 </a>
               )
             )}

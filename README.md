@@ -4,13 +4,16 @@ A festive Secret Santa organiser for `santa.bamber.dev`. The static React/TypeSc
 
 ## What people can do
 
-- Register with any email address and password, verify the email, and join one or more events using a display name.
+- Join an event with a name and optional gift preferences. Each person receives their own randomly generated three-word password for that signup, starting with a Christmas word; no email or verification step is required.
+- Return to the event and enter that password. Each event has a separate sign-in session, so joining another event does not replace existing sessions. Names can change without changing the password.
 - Follow separate signup and gift-exchange countdowns, with exact dates shown in UK time.
 - Change their name or leave before registration closes. Once the organiser draws names, privately reveal their own recipient and revisit it later.
 - Optionally add gift preferences or interests for each event (up to 500 characters). These can be updated until the event is archived and are visible only to that participant, their assigned gift giver after the draw, and the organiser.
 - Read the supplied gift guide, including the approximate £10 budget, wrapping and labelling advice, and gift ideas. The signup date is generated from each event's settings.
 
-The sole organiser creates every location manually. The organiser dashboard manages dates, participants, the draw, and archiving. Each recipient starts concealed behind a Reveal/Hide control, including after a draw or page reload. The organiser can technically access all pairings: this is a trusted-organiser design, not cryptographic secrecy from the person running the draw.
+The sole organiser keeps their existing verified email/password account and creates every location manually. The organiser dashboard manages dates, participants, the draw, and archiving. Passwords and recipients start concealed behind separate Reveal/Hide controls. A participant who forgets their generated password can ask the organiser to look it up. The organiser can technically access all pairings and generated participant passwords: this is a trusted-organiser design, not cryptographic secrecy from the person running the draw.
+
+Previously registered email accounts can still sign in through the event's **Previously joined with email?** link. The participant or organiser can create a password for that existing signup. This preserves the participant ID, preferences, and any completed draw; no one needs to join twice or be redrawn.
 
 Production starts without preset locations. Manchester and Sheffield are optional emulator fixtures only.
 
@@ -54,9 +57,27 @@ npm.cmd run test:rules
 npm.cmd run build
 ```
 
-`npm test` checks draw invariants, malformed assignments, validation, and UK daylight-saving boundaries. `test:rules` starts its own Firestore emulator and verifies account permissions, event isolation, signup cutoffs, and assignment privacy. Stop another Firestore emulator before running it to avoid a port conflict. The build typechecks the app and writes static files to `dist/`.
+`npm test` checks draw invariants, password generation and normalisation, malformed assignments, validation, and UK daylight-saving boundaries. `test:rules` starts its own Firestore emulator and verifies account permissions, event isolation, signup cutoffs, assignment and password privacy, and existing-participant migration. Stop another Firestore emulator before running it to avoid a port conflict. The build typechecks the app and writes static files to `dist/`.
 
-Run `npm.cmd run test:e2e` with the dev server and local emulators running, and both emulator host variables set as shown above. It uses installed Google Chrome in headless mode and resets/reseeds only the explicitly named local `demo-secret-santa` Firestore database before each run. Do not use that demo database for work you want to keep. Browser checks cover registration, verification, multiple memberships, joining/editing/leaving, event creation, drawing, reveal privacy, refreshing routes, reduced motion, and desktop/mobile layout; screenshots are saved in the ignored `artifacts/` directory.
+`npm.cmd run test:e2e` uses installed Google Chrome with a separate test server and isolated Firebase emulators. It exercises generated passwords, returning sign-in, independent event sessions, organiser recovery, legacy participants, draw privacy, and mobile layout. The script refuses the normal development emulator ports, so it cannot reset your local preview data. Screenshots are saved in the ignored `artifacts/` directory. See the script's setup checks for the required test ports.
+
+Start `npm.cmd run emulators:passwords-test` in one terminal. In a second terminal start the isolated preview:
+
+```powershell
+$env:VITE_USE_EMULATORS = 'true'
+$env:VITE_AUTH_EMULATOR_PORT = '9299'
+$env:VITE_FIRESTORE_EMULATOR_PORT = '8280'
+npm.cmd run dev -- --port 5174 --strictPort
+```
+
+Run the browser suite in a third terminal. It resets only this dedicated test database and its test accounts:
+
+```powershell
+$env:FIREBASE_AUTH_EMULATOR_HOST = '127.0.0.1:9299'
+$env:FIRESTORE_EMULATOR_HOST = '127.0.0.1:8280'
+$env:TEST_BASE_URL = 'http://127.0.0.1:5174'
+npm.cmd run test:e2e
+```
 
 With the dev server running, `npm.cmd run test:auth-races` checks delayed account changes, stale role/membership responses, and verification finishing after sign-out. It uses isolated mocked service responses in a fresh Chrome context and does not change emulator data.
 
@@ -80,11 +101,11 @@ npx.cmd firebase login
 npx.cmd firebase deploy --only firestore:rules,firestore:indexes --project secret-santa-organiser
 ```
 
-Deploying rules replaces the project's active ruleset. This app uses `events` and `config`; unspecified collections, including the previous implementation's data, are denied by the new rules. Check any other applications using this Firebase project before deploying. This does not delete existing data.
+Deploying rules replaces the project's active ruleset. This app uses `events`, `participantAccess`, and `config`; unspecified collections, including the previous implementation's data, are denied by the new rules. Check any other applications using this Firebase project before deploying. This does not delete existing data.
 
 ### Set the sole organiser
 
-First register **`thomas.bamber16@gmail.com`** through the site and verify its email. The organiser role is attached to the Firebase **UID**, so an email address alone does not grant admin access.
+Keep the existing verified **`thomas.bamber16@gmail.com`** account. For a fresh project, create the organiser's email/password account in the Firebase Authentication console, then use the site's organiser sign-in and email verification controls. Public participant signup does not create organiser accounts. The organiser role is attached to the Firebase **UID**, so an email address alone does not grant admin access.
 
 The simplest setup is through the Firebase console: find this verified account under Authentication, copy its UID, and create the Firestore document **`config/admin`** with one string field, **`uid`**, containing that exact UID. Refresh the signed-in website. Client-side writes to this role document are forbidden.
 
@@ -107,7 +128,7 @@ The workflow in `.github/workflows/deploy.yml` installs dependencies with `npm c
 2. Verify ownership of `bamber.dev` in GitHub. Set the Pages custom domain to **`santa.bamber.dev`**.
 3. At the domain's DNS provider, set a CNAME for **`santa` → `thobam16.github.io`**. Use the hostname only, without a scheme or repository path.
 4. Once DNS resolves and the certificate is ready, enable **Enforce HTTPS** in Pages settings.
-5. Push the tested implementation to `main`, or manually run the workflow there. Smoke-test registration, email verification, creating an event, joining from a second account, and a small test draw before inviting participants.
+5. Push the tested implementation to `main`, or manually run the workflow there. Smoke-test organiser sign-in, creating an event, participant signup and password return, organiser password recovery, and a small test draw before inviting participants.
 
 GitHub's [custom-domain instructions](https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site/managing-a-custom-domain-for-your-github-pages-site) cover verification and DNS. A custom Actions workflow uses the Pages domain setting; a `CNAME` file is not required.
 
@@ -116,11 +137,11 @@ Assets use relative paths (`./`) by default, so the same build works at both `ht
 ## Running an event
 
 1. Sign in as the organiser and create a location. Set its signup cutoff and gift-exchange date/time in **Europe/London**, plus the budget and party details. Create additional events independently.
-2. Share the event link. People verify their email and join with a name. A person can join several events, once per event.
+2. Share the event link. People enter their name, optionally add gift preferences, and receive their own Christmas password. They should save it for returning to that event. A person can join several events with a separate password for each signup.
 3. Review the roster. Close registration early if needed, or let the server-enforced cutoff pass. At least three participants are required.
 4. Confirm the draw. The roster is locked; names are shuffled using cryptographic randomness with self-matches rejected. Every participant gives and receives exactly once.
 5. Tell participants that results are available on the site. Each account can read only its own published recipient. No custom announcement or reminder email is sent automatically.
-6. Use the row's eye control only when you intentionally want to see a pairing. Changing event, signing out, or reloading conceals it again. After publication, party details can change without altering assignments.
+6. Open **Gift preferences** beneath a participant's name to view their hints. Use the appropriate row's eye control to reveal a password or pairing. Passwords are fetched individually when requested and hidden on tab changes, navigation, account changes, or page reload. Existing email signups show a separate **Create password** action if they do not yet have one. After publication, party details can change without altering assignments.
 7. Archive the event when finished. Published assignments are not routinely redrawn, because someone may already have bought a gift.
 
 Signup and exchange dates are stored as UTC timestamps and shown in UK time. The form rejects the skipped or duplicated hour when UK clocks change. Countdown updates do not make repeated database reads. A countdown reaching zero becomes a status message; Firestore's server time controls whether a signup is accepted.
@@ -129,8 +150,14 @@ Signup and exchange dates are stored as UTC timestamps and shown in UK time. The
 
 The browser freezes the roster, saves one immutable private draw plan, writes assignments in small batches, verifies them, and publishes the saved run. No participant can read an incomplete run. If connectivity fails or a tab closes during saving, reopen the organiser dashboard and resume the same draw. Avoid deleting the saved run or editing its documents manually; that can prevent recovery. If the interruption happened before a plan was saved, the locked event can start its draw normally.
 
-The current recovery plan is stored in one document, with an 850 KB preflight bound below Firestore's 1 MiB document limit. Large events must fit this bound; ordinary office-sized rosters require much less space. Security Rules enforce ownership, verified-email joins, deadline checks, roster locking, and assignment isolation. They do not establish that a malicious organiser used unbiased randomness.
+The current recovery plan is stored in one document, with an 850 KB preflight bound below Firestore's 1 MiB document limit. Large events must fit this bound; ordinary office-sized rosters require much less space. Security Rules enforce ownership, event-specific access, deadline checks, roster locking, and assignment isolation. They do not establish that a malicious organiser used unbiased randomness.
 
 Firestore Spark includes a daily usage allowance; crossing its limits can interrupt service until the quota resets. Keep reads modest and review usage in the Firebase console. Cloud Functions, automated reminders, and paid backup features are outside this version. See [Firebase pricing](https://firebase.google.com/pricing) and [Firestore limits](https://firebase.google.com/docs/firestore/quotas).
 
-Participant names, optional gift preferences, and membership data are stored in Firestore; login email/password handling is provided by Firebase Authentication. The organiser sees the roster, while participants can read their own membership and their assigned recipient's membership after the draw is published. The recipient reveal fetches the latest saved preferences; preferences are not copied into the immutable draw. Archived data remains stored until deliberately removed through trusted project administration. The browser stores sign-in state and the snow preference; recipient reveal state is not retained across navigation or reloads.
+Participant names, optional gift preferences, and membership data are stored in Firestore. Firebase Authentication verifies generated passwords against internal addresses derived from the event ID and password; these addresses are not user emails and receive no mail. New passwords contain three words: one of 64 Christmas words followed by two independently selected words from a 6,296-word list. Choices use cryptographic randomness and unbiased sampling, giving approximately 31 bits before normalisation. This is less resistant to guessing than the previous random suffix; Firebase Auth handles verification and request throttling. Generated account collisions are retried with a new phrase. The word list is adapted from [EFF's Long Wordlist](https://www.eff.org/dice); attribution and changes are in `public/THIRD-PARTY-NOTICES.txt`.
+
+Passwords accept case/spacing/hyphen variations, and previously issued passwords continue to work. They are not placed in URLs or logs. Temporary signup retries retain the generated password in memory only; persisted sign-in sessions are handled by Firebase.
+
+To support the requested organiser recovery, a recoverable copy of each generated password is stored in a separate private `events/{eventId}/credentials/{memberUid}` document. Only the participant and verified organiser can read it; the assigned gift giver cannot. `participantAccess/{authUid}` binds the password account to one event and a stable participant ID, preserving existing draw assignments. Removing a participant also removes these access records atomically. Firebase account creation and Firestore registration are separate operations; uncertain commits are checked before account cleanup so a successful signup is not destroyed.
+
+The organiser sees the roster, while participants can read their own membership and their assigned recipient's membership after the draw is published. The recipient reveal fetches the latest saved preferences; preferences are not copied into the immutable draw. Archived data remains stored until deliberately removed through trusted project administration. The browser stores sign-in state and the snow preference; password and recipient reveal state is not retained across navigation or reloads. Deploy the updated Firestore rules before publishing this frontend, and keep the existing organiser UID unchanged.

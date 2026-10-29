@@ -36,6 +36,17 @@ export interface Recipient extends Assignment {
   preferences: string;
 }
 
+export interface ParticipantAccess {
+  eventId: string;
+  memberUid: string;
+}
+
+export interface ParticipantCredential {
+  authUid: string;
+  password: string;
+  createdAt: number;
+}
+
 export const DEFAULT_GUIDELINES = [
   "Please be thoughtful with your gift selection",
   "Wrap your gift before the exchange",

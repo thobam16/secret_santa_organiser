@@ -9,11 +9,12 @@
     "preview": "vite preview --host 127.0.0.1",
     "test": "vitest run",
     "test:rules": "firebase emulators:exec --only firestore --project demo-secret-santa \"vitest run --config vitest.rules.config.ts\"",
-    "test:e2e": "node scripts/browser-check.mjs",
+    "test:e2e": "node scripts/event-password-check.mjs",
     "test:auth-races": "node scripts/auth-race-check.mjs",
     "test:preferences": "node scripts/preferences-check.mjs",
     "test:snow": "node scripts/snow-check.mjs",
     "emulators": "firebase emulators:start --only auth,firestore --project demo-secret-santa",
+    "emulators:passwords-test": "firebase emulators:start --only auth,firestore --project demo-secret-santa --config firebase.passwords-test.json",
     "seed:emulators": "node scripts/seed-emulators.mjs",
     "typecheck": "tsc -b"
   },

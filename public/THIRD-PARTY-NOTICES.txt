@@ -1,0 +1,12 @@
+Passphrase word list
+
+Derived from EFF's Long Wordlist (2016), Electronic Frontier Foundation.
+Source: https://www.eff.org/files/2016/07/18/eff_large_wordlist.txt
+About the word lists: https://www.eff.org/dice
+License: Creative Commons Attribution 4.0 International (CC BY 4.0),
+under EFF's copyright policy: https://www.eff.org/copyright
+License terms: https://creativecommons.org/licenses/by/4.0/
+
+Changes: removed dice codes; retained unique lowercase ASCII words of six
+to ten letters; sorted and converted to JSON. The site chooses a festive
+first word separately. EFF does not endorse this site or its password format.
